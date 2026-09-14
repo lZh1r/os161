@@ -44,7 +44,59 @@
  * Called by the driver during initialization.
  */
 
+static struct semaphore *male_female_sem;
+static struct semaphore *male_match_sem;
+static struct semaphore *female_male_sem;
+static struct semaphore *female_match_sem;
+static struct semaphore *match_male_sem;
+static struct semaphore *match_female_sem;
+
 void whalemating_init() {
+    male_female_sem = sem_create("male_female_sem", 0);
+    if (male_female_sem == NULL) {
+        panic("male_sem creation failed\n");
+    }
+
+    male_match_sem = sem_create("male_match_sem", 0);
+    if (male_match_sem == NULL) {
+        sem_destroy(male_female_sem);
+        panic("male_sem creation failed\n");
+    }
+
+    female_male_sem = sem_create("female_male_sem", 0);
+    if (female_male_sem == NULL) {
+        sem_destroy(male_female_sem);
+        sem_destroy(male_match_sem);
+        panic("female_sem creation failed\n");
+    }
+
+    female_match_sem = sem_create("female_match_sem", 0);
+    if (female_male_sem == NULL) {
+        sem_destroy(male_female_sem);
+        sem_destroy(male_match_sem);
+        sem_destroy(female_male_sem);
+        panic("female_sem creation failed\n");
+    }
+
+    match_male_sem = sem_create("match_male_sem", 0);
+    if (match_male_sem == NULL) {
+        sem_destroy(male_female_sem);
+        sem_destroy(male_match_sem);
+        sem_destroy(female_male_sem);
+        sem_destroy(female_match_sem);
+        panic("match_sem creation failed\n");
+    }
+
+    match_female_sem = sem_create("match_female_sem", 0);
+    if (match_female_sem == NULL) {
+        sem_destroy(male_female_sem);
+        sem_destroy(male_match_sem);
+        sem_destroy(female_male_sem);
+        sem_destroy(female_match_sem);
+        sem_destroy(match_male_sem);
+        panic("match_sem creation failed\n");
+    }
+
 	return;
 }
 
@@ -54,6 +106,12 @@ void whalemating_init() {
 
 void
 whalemating_cleanup() {
+    sem_destroy(male_female_sem);
+    sem_destroy(male_match_sem);
+    sem_destroy(female_male_sem);
+    sem_destroy(female_match_sem);
+    sem_destroy(match_male_sem);
+    sem_destroy(match_female_sem);
 	return;
 }
 
@@ -65,6 +123,12 @@ male(uint32_t index)
 	 * Implement this function by calling male_start and male_end when
 	 * appropriate.
 	 */
+    male_start(index);
+    V(female_male_sem);
+    V(match_male_sem);
+    P(male_female_sem);
+    P(male_match_sem);
+    male_end(index);
 	return;
 }
 
@@ -76,6 +140,12 @@ female(uint32_t index)
 	 * Implement this function by calling female_start and female_end when
 	 * appropriate.
 	 */
+    female_start(index);
+    V(male_female_sem);
+    V(match_female_sem);
+    P(female_male_sem);
+    P(female_match_sem);
+    female_end(index);
 	return;
 }
 
@@ -87,5 +157,11 @@ matchmaker(uint32_t index)
 	 * Implement this function by calling matchmaker_start and matchmaker_end
 	 * when appropriate.
 	 */
+    matchmaker_start(index);
+    V(male_match_sem);
+    V(female_match_sem);
+    P(match_female_sem);
+    P(match_male_sem);
+    matchmaker_end(index);
 	return;
 }

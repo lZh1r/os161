@@ -259,6 +259,14 @@ cv_create(const char *name)
 
 	// add stuff here as needed
 
+    cv->cv_wchan = wchan_create(cv->cv_name);
+    if (cv->cv_wchan == NULL) {
+        kfree(cv->cv_name);
+        kfree(cv);
+    }
+
+    spinlock_init(&cv->cv_lock);
+
 	return cv;
 }
 
@@ -269,6 +277,8 @@ cv_destroy(struct cv *cv)
 
 	// add stuff here as needed
 
+    wchan_destroy(cv->cv_wchan);
+    spinlock_cleanup(&cv->cv_lock);
 	kfree(cv->cv_name);
 	kfree(cv);
 }
@@ -277,22 +287,149 @@ void
 cv_wait(struct cv *cv, struct lock *lock)
 {
 	// Write this
-	(void)cv;    // suppress warning until code gets written
-	(void)lock;  // suppress warning until code gets written
+	//(void)cv;    // suppress warning until code gets written
+	//(void)lock;  // suppress warning until code gets written
+    spinlock_acquire(&cv->cv_lock);
+    lock_release(lock);
+    wchan_sleep(cv->cv_wchan, &cv->cv_lock);
+    spinlock_release(&cv->cv_lock);
+    lock_acquire(lock);
 }
 
 void
 cv_signal(struct cv *cv, struct lock *lock)
 {
 	// Write this
-	(void)cv;    // suppress warning until code gets written
-	(void)lock;  // suppress warning until code gets written
+	//(void)cv;    // suppress warning until code gets written
+	//(void)lock;  // suppress warning until code gets written
+    KASSERT(lock_do_i_hold(lock));
+    spinlock_acquire(&cv->cv_lock);
+    wchan_wakeone(cv->cv_wchan, &cv->cv_lock);
+    spinlock_release(&cv->cv_lock);
 }
 
 void
 cv_broadcast(struct cv *cv, struct lock *lock)
 {
 	// Write this
-	(void)cv;    // suppress warning until code gets written
-	(void)lock;  // suppress warning until code gets written
+	//(void)cv;    // suppress warning until code gets written
+	//(void)lock;  // suppress warning until code gets written
+    KASSERT(lock_do_i_hold(lock));
+    spinlock_acquire(&cv->cv_lock);
+    wchan_wakeall(cv->cv_wchan, &cv->cv_lock);
+    spinlock_release(&cv->cv_lock);
+}
+
+//////////////////////////////////////////
+//
+// RWLock
+
+struct rwlock *
+rwlock_create(const char *name) {
+    struct rwlock *rw;
+
+    rw = kmalloc(sizeof(*rw));
+    if (rw == NULL) {
+        return NULL;
+    }
+
+    rw->rwlock_name = kstrdup(name);
+    if (rw->rwlock_name == NULL) {
+        kfree(rw);
+        return NULL;
+    }
+
+    rw->rwlock_reader_cv = cv_create(rw->rwlock_name);
+    if (rw->rwlock_reader_cv == NULL) {
+        kfree(rw->rwlock_name);
+        kfree(rw);
+    }
+
+    rw->rwlock_writer_cv = cv_create(rw->rwlock_name);
+    if (rw->rwlock_writer_cv == NULL) {
+        cv_destroy(rw->rwlock_reader_cv);
+        kfree(rw->rwlock_name);
+        kfree(rw);
+    }
+
+    rw->rwlock_lock = lock_create(rw->rwlock_name);
+    if (rw->rwlock_lock == NULL) {
+        cv_destroy(rw->rwlock_reader_cv);
+        cv_destroy(rw->rwlock_writer_cv);
+        kfree(rw->rwlock_name);
+        kfree(rw);
+    }
+
+    rw->rwlock_reader_count = 0;
+    rw->rwlock_writer_editing = false;
+    rw->rwlock_waiting_writer_count = 0;
+    rw->rwlock_waiting_reader_count = 0;
+
+    return rw;
+}
+
+void
+rwlock_destroy(struct rwlock *rw) {
+    KASSERT(rw != NULL);
+
+    lock_destroy(rw->rwlock_lock);
+    cv_destroy(rw->rwlock_reader_cv);
+    cv_destroy(rw->rwlock_writer_cv);
+    kfree(rw->rwlock_name);
+    kfree(rw);
+}
+
+void
+rwlock_acquire_read(struct rwlock *rw) {
+    lock_acquire(rw->rwlock_lock);
+    rw->rwlock_waiting_reader_count++;
+    KASSERT(rw->rwlock_waiting_reader_count > 0);
+    while (rw->rwlock_writer_editing == true || (rw->rwlock_reader_count > 0 && rw->rwlock_waiting_writer_count > 0) || rw->rwlock_write_pending) {
+        cv_wait(rw->rwlock_reader_cv, rw->rwlock_lock);
+    }
+    rw->rwlock_waiting_reader_count--;
+    rw->rwlock_reader_count++;
+    lock_release(rw->rwlock_lock);
+}
+
+void
+rwlock_release_read(struct rwlock *rw) {
+    KASSERT(rw->rwlock_reader_count > 0);
+
+    lock_acquire(rw->rwlock_lock);
+    rw->rwlock_reader_count--;
+    if (rw->rwlock_reader_count == 0 && rw->rwlock_waiting_writer_count > 0) {
+        rw->rwlock_write_pending = true;
+        cv_signal(rw->rwlock_writer_cv, rw->rwlock_lock);
+    }
+    lock_release(rw->rwlock_lock);
+}
+
+void
+rwlock_acquire_write(struct rwlock *rw) {
+    lock_acquire(rw->rwlock_lock);
+    rw->rwlock_waiting_writer_count++;
+    KASSERT(rw->rwlock_waiting_writer_count > 0);
+    while (rw->rwlock_writer_editing == true || rw->rwlock_reader_count != 0) {
+        cv_wait(rw->rwlock_writer_cv, rw->rwlock_lock);
+    }
+    rw->rwlock_write_pending = false;
+    rw->rwlock_writer_editing = true;
+    rw->rwlock_waiting_writer_count--;
+    lock_release(rw->rwlock_lock);
+}
+
+void
+rwlock_release_write(struct rwlock *rw) {
+    KASSERT(rw->rwlock_writer_editing);
+
+    lock_acquire(rw->rwlock_lock);
+    rw->rwlock_writer_editing = false;
+    if (rw->rwlock_waiting_reader_count > 0) {
+        cv_broadcast(rw->rwlock_reader_cv, rw->rwlock_lock);
+    } else if (rw->rwlock_waiting_writer_count > 0) {
+        rw->rwlock_write_pending = true;
+        cv_broadcast(rw->rwlock_writer_cv, rw->rwlock_lock);
+    }
+    lock_release(rw->rwlock_lock);
 }

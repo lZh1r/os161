@@ -121,6 +121,7 @@ struct cv {
         // add what you need here
         // (don't forget to mark things volatile as needed)
         struct wchan *cv_wchan;
+        struct spinlock cv_lock;
 };
 
 struct cv *cv_create(const char *name);
@@ -157,6 +158,15 @@ struct rwlock {
         char *rwlock_name;
         // add what you need here
         // (don't forget to mark things volatile as needed)
+        struct lock *rwlock_lock;
+        struct cv *rwlock_reader_cv;
+        struct cv *rwlock_writer_cv;
+        volatile unsigned rwlock_reader_count;
+        volatile unsigned rwlock_waiting_reader_count;
+        volatile unsigned rwlock_waiting_writer_count;
+        volatile bool rwlock_writer_editing;
+        // so that a new reader cannot acquire the lock when the last reader releases it and notifies the writer 
+        volatile bool rwlock_write_pending; 
 };
 
 struct rwlock * rwlock_create(const char *);

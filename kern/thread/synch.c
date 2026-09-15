@@ -347,15 +347,12 @@ rwlock_create(const char *name) {
 
     rw->rwlock_writer_cv = cv_create(rw->rwlock_name);
     if (rw->rwlock_writer_cv == NULL) {
-        cv_destroy(rw->rwlock_reader_cv);
         kfree(rw->rwlock_name);
         kfree(rw);
     }
 
     rw->rwlock_lock = lock_create(rw->rwlock_name);
     if (rw->rwlock_lock == NULL) {
-        cv_destroy(rw->rwlock_reader_cv);
-        cv_destroy(rw->rwlock_writer_cv);
         kfree(rw->rwlock_name);
         kfree(rw);
     }

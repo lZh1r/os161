@@ -443,6 +443,9 @@ void
 check_intersection() {
 	int n = 0;
 	for (int i = 0; i < NUM_QUADRANTS; i++) {
+        if (quadrant_array[i] > 1) {
+            panic("COLLISION %d!!!", i);
+        }
 		failif((quadrant_array[i] > 1), "failed: collision");
 		n += quadrant_array[i];
 	}
@@ -669,6 +672,7 @@ int stoplight(int nargs, char **args) {
 	for (i = 0; i < NCARS; i++) {
 		passed += car_locations[i] == PASSED_CAR ? 1 : 0;
 	}
+    kprintf("TOTAL CARS PASSED: %d/%d\n", passed, NCARS);
 	if ((test_status == TEST161_SUCCESS) &&
 			(!(failif((passed != NCARS), "failed: not enough cars"))) &&
 			(!(failif((all_quadrant != required_quadrant), "failed: didn't do the right turns"))) &&

@@ -72,9 +72,44 @@
 /*
  * Called by the driver during initialization.
  */
+static struct lock *stat_lock;
+static struct cv *stat_cv;
+static volatile bool occupancy[4];
+static volatile int waiting[4];
+static struct lock *locks[4];
+static volatile uint32_t turn = 0;
+static volatile int cars = 0;
+
+static
+int
+straight_quadrant(uint32_t direction) {
+    return (direction + 3) % 4;
+}
+
+static
+int
+left_quadrant(uint32_t direction) {
+    return ((int)direction + 2) % 4;
+}
 
 void
 stoplight_init() {
+    stat_lock = lock_create("statlock");
+    if (stat_lock == NULL) {
+        panic("cannot create lock");
+    }
+
+    stat_cv = cv_create("statcv");
+    if (stat_cv == NULL) {
+        panic("cannot create cv");
+    }
+
+    for (int i = 0; i < 4; i++) {
+        locks[i] = lock_create("lockxd");
+        occupancy[i] = false;
+        waiting[i] = 0;
+    }
+
 	return;
 }
 
@@ -83,36 +118,120 @@ stoplight_init() {
  */
 
 void stoplight_cleanup() {
+    for (int i = 0; i<4; i++) {
+        lock_destroy(locks[i]);
+    }
+    lock_destroy(stat_lock);
+    cv_destroy(stat_cv);
 	return;
 }
+
+// Some helpers to reduce boilerplate
+
+static
+bool
+can_enter(uint32_t direction) {
+    return (turn == direction || !waiting[turn]) && !occupancy[direction] && cars < 3;
+}
+
+static
+void
+enter(uint32_t direction) {
+    bool slept = false;
+    lock_acquire(stat_lock);
+    while (!can_enter(direction)) {
+        if (!slept) {
+            waiting[direction]++;
+            slept = true;
+        }
+        cv_wait(stat_cv, stat_lock);
+    }
+    if (slept) {
+        waiting[direction]--;
+    }
+    cars++;
+    turn = (turn + 1) % 4;
+    occupancy[direction] = true;
+    lock_release(stat_lock);
+}
+
+static
+void
+leave(uint32_t direction) {
+    lock_acquire(stat_lock);
+    occupancy[direction] = false;
+    cars--;
+    cv_broadcast(stat_cv, stat_lock);
+    lock_release(stat_lock);
+}
+
+////////////////////////////////
+// Solution
 
 void
 turnright(uint32_t direction, uint32_t index)
 {
-	(void)direction;
-	(void)index;
-	/*
-	 * Implement this function.
-	 */
+    enter(direction);
+
+    // Mark that we are at quadrant direction and leave the intersection
+    lock_acquire(locks[direction]);
+    inQuadrant(direction, index);
+    leaveIntersection(index);
+    lock_release(locks[direction]);
+
+    leave(direction);
 	return;
 }
 void
 gostraight(uint32_t direction, uint32_t index)
 {
-	(void)direction;
-	(void)index;
-	/*
-	 * Implement this function.
-	 */
+    uint32_t target = straight_quadrant(direction);
+
+    enter(direction);
+
+    // Mark that we entered the intersection
+    lock_acquire(locks[direction]);
+    inQuadrant(direction, index);
+
+    // Get a hold of the next quadrant
+    lock_acquire(locks[target]);
+    // Mark that quadrant
+    inQuadrant(target, index);
+    // DO NOT RELEASE THIS LOCK BEFORE MARKING THE QUADRANT!!!
+    lock_release(locks[direction]);
+    // Leave
+    leaveIntersection(index);
+    lock_release(locks[target]);
+
+    leave(direction);
 	return;
 }
 void
 turnleft(uint32_t direction, uint32_t index)
 {
-	(void)direction;
-	(void)index;
-	/*
-	 * Implement this function.
-	 */
+    uint32_t midpoint = straight_quadrant(direction);
+    uint32_t target = left_quadrant(direction);
+
+    enter(direction);
+
+    lock_acquire(locks[direction]);
+    inQuadrant(direction, index);
+
+    lock_acquire(locks[midpoint]);
+    // Mark that quadrant
+    inQuadrant(midpoint, index);
+    // DO NOT RELEASE THIS LOCK BEFORE MARKING THE QUADRANT!!!
+    lock_release(locks[direction]);
+
+    lock_acquire(locks[target]);
+    // Mark that quadrant
+    inQuadrant(target, index);
+    // DO NOT RELEASE THIS LOCK BEFORE MARKING THE QUADRANT!!!
+    lock_release(locks[midpoint]);
+    // Leave
+    leaveIntersection(index);
+    lock_release(locks[target]);
+
+    leave(direction);
 	return;
 }

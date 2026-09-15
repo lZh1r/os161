@@ -381,7 +381,11 @@ rwlock_acquire_read(struct rwlock *rw) {
     lock_acquire(rw->rwlock_lock);
     rw->rwlock_waiting_reader_count++;
     KASSERT(rw->rwlock_waiting_reader_count > 0);
-    while (rw->rwlock_writer_editing == true || (rw->rwlock_reader_count > 0 && rw->rwlock_waiting_writer_count > 0) || rw->rwlock_write_pending) {
+    while (
+        rw->rwlock_writer_editing == true
+        || (rw->rwlock_reader_count > 0 && rw->rwlock_waiting_writer_count > 0)
+        || rw->rwlock_write_pending
+    ) {
         cv_wait(rw->rwlock_reader_cv, rw->rwlock_lock);
     }
     rw->rwlock_waiting_reader_count--;

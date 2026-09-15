@@ -59,41 +59,26 @@ void whalemating_init() {
 
     male_match_sem = sem_create("male_match_sem", 0);
     if (male_match_sem == NULL) {
-        sem_destroy(male_female_sem);
         panic("male_sem creation failed\n");
     }
 
     female_male_sem = sem_create("female_male_sem", 0);
     if (female_male_sem == NULL) {
-        sem_destroy(male_female_sem);
-        sem_destroy(male_match_sem);
         panic("female_sem creation failed\n");
     }
 
     female_match_sem = sem_create("female_match_sem", 0);
     if (female_male_sem == NULL) {
-        sem_destroy(male_female_sem);
-        sem_destroy(male_match_sem);
-        sem_destroy(female_male_sem);
         panic("female_sem creation failed\n");
     }
 
     match_male_sem = sem_create("match_male_sem", 0);
     if (match_male_sem == NULL) {
-        sem_destroy(male_female_sem);
-        sem_destroy(male_match_sem);
-        sem_destroy(female_male_sem);
-        sem_destroy(female_match_sem);
         panic("match_sem creation failed\n");
     }
 
     match_female_sem = sem_create("match_female_sem", 0);
     if (match_female_sem == NULL) {
-        sem_destroy(male_female_sem);
-        sem_destroy(male_match_sem);
-        sem_destroy(female_male_sem);
-        sem_destroy(female_match_sem);
-        sem_destroy(match_male_sem);
         panic("match_sem creation failed\n");
     }
 

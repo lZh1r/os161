@@ -108,6 +108,7 @@ stoplight_init() {
         locks[i] = lock_create("lockxd");
         if (locks[i] == NULL) {
             panic("cannot create a lock");
+        }
         occupancy[i] = false;
         waiting[i] = 0;
     }

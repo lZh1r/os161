@@ -12,6 +12,64 @@
 #include <kern/test161.h>
 #include <spinlock.h>
 
+#define NTHREADS 20
+#define NREADS 100
+
+static struct rwlock *thelock;
+static struct semaphore *firstsem;
+static struct semaphore *secondsem;
+static struct semaphore *megasem;
+static struct semaphore *rwsem;
+static volatile int data = 1337; 
+
+static
+void
+writer_thread(void *junk, unsigned long junk2) {
+    (void)junk;
+    (void)junk2;
+    V(megasem);
+    rwlock_acquire_write(thelock);
+    kprintf("writer acquired the lock\n");
+    P(rwsem);
+    for (int i = 0; i < NREADS; i++) {
+        random_yielder(4);
+    }
+    data = 28;
+    rwlock_release_write(thelock);
+}
+
+static
+void
+reader_thread1(void *junk, unsigned long index) {
+    (void)junk;
+
+    rwlock_acquire_read(thelock);
+    kprintf("reader %ld acquired the lock\n", index);
+    V(firstsem);
+    for (int i = 0; i < NREADS; i++) {
+        random_yielder(4);
+        KASSERT(1337 == data);
+    }
+    rwlock_release_read(thelock);
+}
+
+static
+void
+reader_thread2(void *junk, unsigned long junk2) {
+    (void)junk;
+    (void)junk2;
+
+    kprintf("second batch reader started\n");
+    V(rwsem);
+    rwlock_acquire_read(thelock);
+    for (int i = 0; i < NREADS; i++) {
+        random_yielder(4);
+        KASSERT(28 == data);
+    }
+    rwlock_release_read(thelock);
+    V(secondsem);
+}
+
 /*
  * Use these stubs to test your reader-writer locks.
  */
@@ -21,13 +79,67 @@ int rwtest(int nargs, char **args) {
 	(void)args;
 
     kprintf("Starting rwt1");
-	success(TEST161_FAIL, SECRET, "rwt1");
+
+    thelock = rwlock_create("thelock");
+    if (thelock == NULL) {
+        panic("rwt1: could not create an rwlock");
+    }
+
+    firstsem = sem_create("fistsem", 0);
+    if (firstsem == NULL) {
+        panic("rwt1: could not create a semaphore");
+    }
+    secondsem = sem_create("secondsem", 0);
+    if (firstsem == NULL) {
+        panic("rwt1: could not create a semaphore");
+    }
+    megasem = sem_create("megasem", 0);
+    if (megasem == NULL) {
+        panic("rwt1: could not create a semaphore");
+    }
+    rwsem = sem_create("rwsem", 0);
+    if (rwsem == NULL) {
+        panic("rwt1: could not create a semaphore");
+    }
+    
+    for (int i = 0; i < NTHREADS; i++) {
+        int result = thread_fork("rwt1-reader1", NULL, reader_thread1, NULL, i);
+        if (result) {
+            panic("rwt1: thread creation failed");
+        }
+    }
+
+    // all readers should acquire the lock
+    for (int i = 0; i < NTHREADS; i++) {
+        P(firstsem);
+    }
+
+    int result = thread_fork("rwt1-writer", NULL, writer_thread, NULL, 0);
+    if (result) {
+        panic("rwt1: thread creation failed");
+    }
+
+    P(megasem);
+
+    for (int i = 0; i < NTHREADS; i++) {
+        int result = thread_fork("rwt1-reader2", NULL, reader_thread2, NULL, 0);
+        random_yielder(4);
+        if (result) {
+            panic("rwt1: thread creation failed");
+        }
+    }
+
+    for (int i = 0; i < NTHREADS; i++) {
+        P(secondsem);
+    }
+
+	success(TEST161_SUCCESS, SECRET, "rwt1");
+
+    data = 1337;
 
 	return 0;
 }
 
-#define NTHREADS 50
-#define NREADS 100
 static struct rwlock *testlock;
 static volatile int testdata;
 static struct semaphore *testsem;

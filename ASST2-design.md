@@ -52,7 +52,7 @@ The part of running the new program is probably not the biggest hurdle, as that 
 
 The difficulty comes from handling the arguments passed to the new program.
 
-Since they reside in a null-terminated array of null-terminated strings we need a way of copying these arguments 
+Since they reside in a null-terminated array of null-terminated strings we need a way of copying these arguments from the caller's address space into the one owned by the new process.
 
 ## Filesystem support
 The filesystem operations introduce some new state to the processes right of the bat.
@@ -118,3 +118,14 @@ A good syscall handler is essential for that.
 Another big problem is user level fatal exceptions.
 
 In order to handle those the kernel needs a good kill\_process implementation which might be tricky.
+
+## Process structure summary
+The process structure (excluding existing fields) so far should be something like:
+- p\_id
+- p\_fdtable
+- p\_status
+- p\_exit\_code
+- p\_curdir
+- p\_sleeplock (for exclusive access to its structure)
+- p\_parent
+- p\_children

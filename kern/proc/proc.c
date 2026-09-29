@@ -85,6 +85,35 @@ proc_get_free_id() {
 }
 
 /*
+ * Release an id to make it usable for new processes.
+ */
+static
+void
+proc_release_id(pid_t id) {
+    int index = id;
+
+    rwlock_acquire_write(proc_table_lock);
+
+    unsigned length = proc_array_num(proc_table);
+
+    if ((unsigned) id == length - 1) {
+        struct proc *value;
+        do {
+            proc_array_remove(proc_table, (unsigned) index);
+            index--;
+            if (index < 0) {
+                break;
+            }
+            
+        } while ((value = proc_array_get(proc_table, index)) == NULL);
+    } else {
+        proc_array_set(proc_table, index, NULL);
+    }
+
+    rwlock_release_write(proc_table_lock);
+}
+
+/*
  * Create a proc structure.
  */
 static
@@ -189,6 +218,7 @@ proc_destroy(struct proc *proc)
 
 	KASSERT(proc != NULL);
 	KASSERT(proc != kproc);
+    KASSERT(proc->p_status == PROC_DESTROY);
 
 	/*
 	 * We don't take p_lock in here because we must have the only
@@ -253,6 +283,7 @@ proc_destroy(struct proc *proc)
 	KASSERT(proc->p_numthreads == 0);
 	spinlock_cleanup(&proc->p_lock);
 
+    proc_array_cleanup(proc->p_children);
     lock_destroy(proc->p_sleeplock);
     cv_destroy(proc->p_cv);
 	kfree(proc->p_name);
@@ -417,4 +448,82 @@ proc_setas(struct addrspace *newas)
 	proc->p_addrspace = newas;
 	spinlock_release(&proc->p_lock);
 	return oldas;
+}
+
+/*
+ * Wait for another process to exit.
+ * Returns the exitcode of the proc or -1 on failure.
+ */
+int
+proc_wait(struct proc *proc)
+{
+    int code;
+    pid_t exit_pid;
+
+    KASSERT(proc != NULL);
+    // only a parent can wait for its child
+    KASSERT(proc->p_parent == curthread->t_proc);
+    KASSERT(curproc != NULL);
+
+    struct lock *child_lock = proc->p_sleeplock;
+    lock_acquire(child_lock);
+
+    while(proc->p_status != PROC_EXIT) {
+        cv_wait(proc->p_cv, child_lock);
+    }
+    proc->p_status = PROC_DESTROY;
+    code = proc->p_exitcode;
+    exit_pid = proc->p_id;
+
+    lock_release(child_lock);
+
+    proc_destroy(proc);
+
+    // parent bookkeeping
+    lock_acquire(curproc->p_sleeplock);
+    
+    struct proc *holder;
+    unsigned index = 0;
+    //unsigned child_amount = proc_array_num(curproc->p_children);
+    // no checking since this should crash
+    // if for some mysterious reason the process we are waiting for considered current process its parent,
+    // while the latter does not have it in its child list
+    while ((holder = proc_array_get(curproc->p_children, index)) != proc) {
+        index++;
+    }
+    proc_array_remove(curproc->p_children, index);
+
+    lock_release(curproc->p_sleeplock);
+
+    proc_release_id(exit_pid);
+
+    return code;
+}
+
+/*
+ * Exit with an exit code, abandoning all of the children (they will get adopted by the kernel process)
+ */
+// does not return
+void
+proc_exit(int exitcode) {
+    KASSERT(curproc != kproc);
+
+    lock_acquire(curproc->p_sleeplock);
+    curproc->p_status = PROC_EXIT;
+    curproc->p_exitcode = exitcode;
+
+    unsigned child_amount = proc_array_num(curproc->p_children);
+    if (child_amount > 0) {
+        for (unsigned i = 0; i < child_amount; i++) {
+            struct proc *p = proc_array_get(curproc->p_children, i);
+            lock_acquire(p->p_sleeplock);
+            p->p_parent = kproc;
+            lock_release(p->p_sleeplock);
+        }
+    }
+
+    cv_signal(curproc->p_cv, curproc->p_sleeplock);
+    lock_release(curproc->p_sleeplock);
+    thread_exit();
+    panic("THE ZOMBIES ATE YOUR BRAINS!");
 }

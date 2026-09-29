@@ -137,5 +137,11 @@ struct addrspace *proc_getas(void);
 /* Change the address space of the current process, and return the old one. */
 struct addrspace *proc_setas(struct addrspace *);
 
+/* Make current process exit with some exit code */
+void proc_exit(int exitcode);
+
+/* Wait for a process to exit, cleaning up after it */
+int proc_wait(struct proc *proc);
+
 
 #endif /* _PROC_H_ */

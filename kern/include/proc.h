@@ -37,10 +37,37 @@
  */
 
 #include <spinlock.h>
+#include <synch.h>
+#include <array.h>
+
+#define PROC_MAX_ID 1024
+#define PROC_MAX_FD 1024
+#define PROC_MAX_CHILDREN 32
+
+#ifndef PROC_INLINE
+#define PROC_INLINE INLINE
+#endif
+
+DECLARRAY_BYTYPE(proc_array, struct proc, PROC_INLINE);
+DEFARRAY_BYTYPE(proc_array, struct proc, PROC_INLINE)
 
 struct addrspace;
 struct thread;
 struct vnode;
+
+/*
+ * Process status
+ * PROC_NEW - brand new process (maybe?)
+ * PROC_ACTIVE - a process that has been properly initialized and can be run by the system
+ * PROC_EXIT - a process has exited, but its resources cannot yet be reclaimed, as its parent has not returned from waitpid call
+ * PROC_DESTROY - a process can be destroyed
+ */
+enum proc_status {
+    PROC_NEW,
+    PROC_ACTIVE,
+    PROC_EXIT,
+    PROC_DESTROY
+};
 
 /*
  * Process structure.
@@ -71,6 +98,19 @@ struct proc {
 	struct vnode *p_cwd;		/* current working directory */
 
 	/* add more material here as needed */
+    struct lock *p_sleeplock;    /* a sleeplock for waitpid and other things */
+
+    struct cv *p_cv; /* condition variable for waiting on other processes */
+
+    pid_t p_id;     /* process id */
+
+    enum proc_status p_status; /* process status */
+
+    int p_exitcode; /* exit code */
+
+    struct proc *p_parent; /* pointer to the parent process */
+
+    struct proc_array *p_children; /* array of child struct proc pointers */
 };
 
 /* This is the process structure for the kernel and for kernel-only threads. */

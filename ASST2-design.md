@@ -28,6 +28,8 @@ This very state marker should help the kernel differentiate a process that has e
 
 The call itself might be implemented by simply waiting on a condition variable or even on a wait channel.
 
+At the end of the call the process being waited on will be destroyed via proc_destroy, as in Unix model there can be only one process waiting for it to exit.
+
 ### getpid
 Super simple one. Just return the process ID field of the process that invoked this system call.
 

@@ -42,6 +42,8 @@
  * process that will have more than one thread is the kernel process.
  */
 
+#define PROC_INLINE
+
 #include <types.h>
 #include <spl.h>
 #include <proc.h>
@@ -53,6 +55,34 @@
  * The process for the kernel; this holds all the kernel-only threads.
  */
 struct proc *kproc;
+
+/*
+ * The table for getting processes by their id
+ */
+struct proc_array *proc_table;
+
+struct rwlock *proc_table_lock;
+
+/*
+ * Get a free process id in the process table
+ * If there is no free id in the table returns -1
+ */
+static
+pid_t
+proc_get_free_id() {
+    pid_t result;
+    rwlock_acquire_read(proc_table_lock);
+    unsigned amount = proc_array_num(proc_table);
+    result = -1;
+    for (unsigned i = 0; i < amount; i++) {
+        if (proc_array_get(proc_table, i) == NULL) {
+            result = (pid_t) i;
+            break;
+        }
+    }
+    rwlock_release_read(proc_table_lock);
+    return result;
+}
 
 /*
  * Create a proc structure.
@@ -73,6 +103,33 @@ proc_create(const char *name)
 		return NULL;
 	}
 
+    // maybe change the name later but thats only for debugging anyway
+    proc->p_sleeplock = lock_create(name);
+    if (proc->p_sleeplock == NULL) {
+		kfree(proc->p_name);
+		kfree(proc);
+        return NULL;
+    }
+
+    // maybe change the name later but thats only for debugging anyway
+    proc->p_cv = cv_create(name);
+    if (proc->p_cv == NULL) {
+        lock_destroy(proc->p_sleeplock);
+		kfree(proc->p_name);
+		kfree(proc);
+        return NULL;
+    }
+
+    proc->p_children = proc_array_create();
+    if (proc->p_children == NULL) {
+        cv_destroy(proc->p_cv);
+        lock_destroy(proc->p_sleeplock);
+		kfree(proc->p_name);
+		kfree(proc);
+        return NULL;
+    }
+    proc_array_init(proc->p_children);
+
 	proc->p_numthreads = 0;
 	spinlock_init(&proc->p_lock);
 
@@ -81,6 +138,34 @@ proc_create(const char *name)
 
 	/* VFS fields */
 	proc->p_cwd = NULL;
+
+    /* Parent stuff */
+    if (curthread == NULL) {
+        // kernel proc
+        proc->p_parent = NULL;
+    } else {
+        proc->p_parent = curthread->t_proc;
+        KASSERT(proc->p_parent != NULL);
+    }
+
+    proc->p_exitcode = 0;
+    proc->p_status = PROC_NEW;
+    pid_t new_id = proc_get_free_id();
+    
+    // resolve the process id and set the process table entry
+    rwlock_acquire_write(proc_table_lock);
+
+    if (new_id == -1) {
+        unsigned ret;
+        proc_array_add(proc_table, proc, &ret);
+        new_id = (pid_t) ret;
+    } else {
+        proc_array_set(proc_table, new_id, proc);
+    }
+
+    proc->p_id = new_id;
+
+    rwlock_release_write(proc_table_lock);
 
 	return proc;
 }
@@ -168,6 +253,8 @@ proc_destroy(struct proc *proc)
 	KASSERT(proc->p_numthreads == 0);
 	spinlock_cleanup(&proc->p_lock);
 
+    lock_destroy(proc->p_sleeplock);
+    cv_destroy(proc->p_cv);
 	kfree(proc->p_name);
 	kfree(proc);
 }
@@ -178,6 +265,19 @@ proc_destroy(struct proc *proc)
 void
 proc_bootstrap(void)
 {
+    proc_table = proc_array_create();
+
+    if (proc_table == NULL) {
+        panic("failed to create proc_table");
+    }
+
+    proc_array_init(proc_table);
+
+    proc_table_lock = rwlock_create("[process table lock]");
+    if (proc_table_lock == NULL) {
+        panic("rwlock_create for proc_table_lock failed\n");
+    }
+
 	kproc = proc_create("[kernel]");
 	if (kproc == NULL) {
 		panic("proc_create for kproc failed\n");

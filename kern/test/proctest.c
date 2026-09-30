@@ -6,6 +6,7 @@
 #include <current.h>
 
 #define NPROCS 10
+#define NTIMES 1024
 
 static bool test_status = TEST161_SUCCESS;
 static struct proc *procs[NPROCS];
@@ -54,9 +55,9 @@ procidtest(int nargs, char **args) {
     (void)args;
     kprintf("Starting procidtest\n");
 
-    procidtest_internal();
-    failif(proc_get_proc_amount() != 1);
-    procidtest_internal();
+    for (int i = 0; i < NTIMES; i++) {
+        procidtest_internal();
+    }
 
     kprintf("process amount: %d (should be 1)\n", proc_get_proc_amount());
     failif(proc_get_proc_amount() != 1);

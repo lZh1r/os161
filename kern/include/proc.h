@@ -39,6 +39,7 @@
 #include <spinlock.h>
 #include <synch.h>
 #include <array.h>
+#include <syscall.h>
 
 #define PROC_MAX_ID 1024
 #define PROC_MAX_FD 1024
@@ -145,7 +146,10 @@ int proc_wait(struct proc *proc);
 
 pid_t proc_get_free_id(void);
 unsigned proc_get_proc_amount(void);
+unsigned proc_get_child_amount(struct proc *);
 
 struct proc *proc_create(const char *);
+
+struct proc *proc_fork(struct trapframe *tf);
 
 #endif /* _PROC_H_ */

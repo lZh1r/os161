@@ -110,6 +110,17 @@ syscall(struct trapframe *tf)
 		break;
 
 	    /* Add stuff here */
+        case SYS_fork:
+        (void)1;
+        struct trapframe *new_tf;
+        new_tf = kmalloc(sizeof(struct trapframe));
+        if (new_tf == NULL) {
+            err = ENOMEM;
+        } else {
+            *new_tf = *tf;
+            err = sys_fork(new_tf, &retval);
+        }
+        break;
 
 	    default:
 		kprintf("Unknown syscall %d\n", callno);
@@ -155,7 +166,14 @@ syscall(struct trapframe *tf)
  * Thus, you can trash it and do things another way if you prefer.
  */
 void
-enter_forked_process(struct trapframe *tf)
+enter_forked_process(void *frame, long unsigned junk)
 {
-	(void)tf;
+    (void)junk;
+    struct trapframe tf;
+	tf = *(struct trapframe *)frame;
+    kfree(frame);
+    tf.tf_v0 = 0;
+    tf.tf_a3 = 0;
+    tf.tf_epc += 4;
+    mips_usermode(&tf);
 }

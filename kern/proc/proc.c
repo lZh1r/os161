@@ -83,6 +83,9 @@ proc_get_free_id() {
     return result;
 }
 
+/*
+ * Returns the amount of processes in the system
+ */
 unsigned
 proc_get_proc_amount() {
     unsigned result;
@@ -90,6 +93,16 @@ proc_get_proc_amount() {
     result = proc_array_num(proc_table);
     rwlock_release_read(proc_table_lock);
     return result;
+}
+
+unsigned
+proc_get_child_amount(struct proc *proc) {
+    unsigned val;
+    KASSERT(proc != NULL);
+    lock_acquire(proc->p_sleeplock);
+    val = proc_array_num(proc->p_children);
+    lock_release(proc->p_sleeplock);
+    return val;
 }
 
 /*
@@ -541,11 +554,21 @@ proc_exit(int exitcode) {
 }
 
 /*
- * Create a copy of the current process with a new id and some other stuff
+ * Create a copy of the current process with a new id and some other stuff.
  */
-//struct proc *
-//proc_fork(void) {
-//    struct proc *new_proc;
-//    new_proc = proc_create();
-//    return new_proc;
-//}
+struct proc *
+proc_fork(struct trapframe *tf) {
+    struct proc *new_proc;
+    new_proc = proc_create("user process");
+    if (new_proc == NULL) {
+        return NULL;
+    }
+    struct addrspace *as = as_create();
+    as_copy(proc_getas(), &as);
+
+    new_proc->p_addrspace = as;
+
+    thread_fork("user thread", new_proc, enter_forked_process, tf, 0);
+
+    return new_proc;
+}

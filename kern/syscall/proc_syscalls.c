@@ -19,3 +19,9 @@ sys_fork(struct trapframe *tf, int *retval) {
     *retval = (int) result->p_id;
     return 0;
 }
+
+int
+sys__exit(int code) {
+    proc_exit(code);
+    return 1;
+}

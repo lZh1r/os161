@@ -25,3 +25,10 @@ sys__exit(int code) {
     proc_exit(code);
     return 1;
 }
+
+pid_t
+sys_getpid(void) {
+    // we can reasonably assume that reading process id is atomic,
+    // as it does not really change unless the process struct gets deallocated
+    return curproc->p_id;
+}

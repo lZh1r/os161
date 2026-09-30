@@ -118,6 +118,10 @@ int kmalloctest4(int, char **);
 int kmalloctest5(int, char **);
 int nettest(int, char **);
 
+/* asst2 related tests */
+int procidtest(int, char **);
+int procwaittest(int, char **);
+
 /* Routine for running a user-level program. */
 int runprogram(char *progname);
 

@@ -452,6 +452,9 @@ file		test/kmalloctest.c
 file		test/fstest.c
 file		test/lib.c
 
+# asst2 related tests
+file        test/proctest.c
+
 optfile net	test/nettest.c
 
 defoption synchprobs

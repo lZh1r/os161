@@ -757,6 +757,10 @@ static struct {
 	{ "rwt3",	rwtest3 },
 	{ "rwt4",	rwtest4 },
 	{ "rwt5",	rwtest5 },
+
+    /* asst2 */
+    { "procidtest", procidtest },
+    { "procwaittest", procwaittest },
 #if OPT_SYNCHPROBS
 	{ "sp1",	whalemating },
 	{ "sp2",	stoplight },

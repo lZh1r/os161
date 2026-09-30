@@ -67,7 +67,6 @@ struct rwlock *proc_table_lock;
  * Get a free process id in the process table
  * If there is no free id in the table returns -1
  */
-static
 pid_t
 proc_get_free_id() {
     pid_t result;
@@ -80,6 +79,15 @@ proc_get_free_id() {
             break;
         }
     }
+    rwlock_release_read(proc_table_lock);
+    return result;
+}
+
+unsigned
+proc_get_proc_amount() {
+    unsigned result;
+    rwlock_acquire_read(proc_table_lock);
+    result = proc_array_num(proc_table);
     rwlock_release_read(proc_table_lock);
     return result;
 }
@@ -116,7 +124,6 @@ proc_release_id(pid_t id) {
 /*
  * Create a proc structure.
  */
-static
 struct proc *
 proc_create(const char *name)
 {
@@ -484,12 +491,17 @@ proc_wait(struct proc *proc)
     
     struct proc *holder;
     unsigned index = 0;
-    //unsigned child_amount = proc_array_num(curproc->p_children);
+    unsigned child_amount = proc_array_num(curproc->p_children);
+    KASSERT(child_amount > 0);
     // no checking since this should crash
     // if for some mysterious reason the process we are waiting for considered current process its parent,
     // while the latter does not have it in its child list
     while ((holder = proc_array_get(curproc->p_children, index)) != proc) {
         index++;
+        if (index >= child_amount) {
+            panic("child not found\n");
+            break;
+        }
     }
     proc_array_remove(curproc->p_children, index);
 
@@ -527,3 +539,13 @@ proc_exit(int exitcode) {
     thread_exit();
     panic("THE ZOMBIES ATE YOUR BRAINS!");
 }
+
+/*
+ * Create a copy of the current process with a new id and some other stuff
+ */
+//struct proc *
+//proc_fork(void) {
+//    struct proc *new_proc;
+//    new_proc = proc_create();
+//    return new_proc;
+//}

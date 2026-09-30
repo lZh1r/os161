@@ -143,5 +143,9 @@ void proc_exit(int exitcode);
 /* Wait for a process to exit, cleaning up after it */
 int proc_wait(struct proc *proc);
 
+pid_t proc_get_free_id(void);
+unsigned proc_get_proc_amount(void);
+
+struct proc *proc_create(const char *);
 
 #endif /* _PROC_H_ */

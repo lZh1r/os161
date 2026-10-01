@@ -3,6 +3,7 @@
 #include <proc.h>
 #include <kern/errno.h>
 #include <current.h>
+#include <copyinout.h>
 
 int
 sys_fork(struct trapframe *tf, int *retval) {
@@ -31,4 +32,27 @@ sys_getpid(void) {
     // we can reasonably assume that reading process id is atomic,
     // as it does not really change unless the process struct gets deallocated
     return curproc->p_id;
+}
+
+int
+sys_waitpid(pid_t pid, userptr_t status, int options) {
+    if (pid <= 0 || options != 0) {
+        return EINVAL;
+    }
+    struct proc *target = proc_get_by_id(pid);
+    if (target == NULL) {
+        return ESRCH;
+    }
+
+    if (target->p_parent != curproc) {
+        return ECHILD;
+    }
+
+    int exitcode = proc_wait(target);
+
+    if (status != NULL && copyout(&exitcode, status, sizeof(exitcode))) {
+        return EFAULT;
+    }
+    
+    return 0;
 }

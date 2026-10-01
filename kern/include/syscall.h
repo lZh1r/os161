@@ -61,5 +61,6 @@ int sys___time(userptr_t user_seconds, userptr_t user_nanoseconds);
 int sys_fork(struct trapframe *tf, int *retval);
 int sys__exit(int code);
 pid_t sys_getpid(void);
+int sys_waitpid(pid_t pid, userptr_t status, int options);
 
 #endif /* _SYSCALL_H_ */

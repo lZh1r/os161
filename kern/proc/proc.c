@@ -95,6 +95,9 @@ proc_get_proc_amount() {
     return result;
 }
 
+/*
+ * Returns the amount of children a process has
+ */
 unsigned
 proc_get_child_amount(struct proc *proc) {
     unsigned val;
@@ -103,6 +106,22 @@ proc_get_child_amount(struct proc *proc) {
     val = proc_array_num(proc->p_children);
     lock_release(proc->p_sleeplock);
     return val;
+}
+
+/*
+ *
+ */
+struct proc *
+proc_get_by_id(pid_t pid) {
+    struct proc *retval;
+    KASSERT(pid > 0);
+    if (proc_get_proc_amount() <= (unsigned) pid) {
+        return NULL;
+    }
+    rwlock_acquire_read(proc_table_lock);
+    retval = proc_array_get(proc_table, (unsigned) pid);
+    rwlock_release_read(proc_table_lock);
+    return retval;
 }
 
 /*
@@ -193,8 +212,13 @@ proc_create(const char *name)
         // kernel proc
         proc->p_parent = NULL;
     } else {
+        lock_acquire(curproc->p_sleeplock);
+
         proc->p_parent = curthread->t_proc;
         KASSERT(proc->p_parent != NULL);
+        proc_array_add(curproc->p_children, proc, NULL);
+
+        lock_release(curproc->p_sleeplock);
     }
 
     proc->p_exitcode = 0;

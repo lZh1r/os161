@@ -147,6 +147,7 @@ int proc_wait(struct proc *proc);
 pid_t proc_get_free_id(void);
 unsigned proc_get_proc_amount(void);
 unsigned proc_get_child_amount(struct proc *);
+struct proc *proc_get_by_id(pid_t pid);
 
 struct proc *proc_create(const char *);
 

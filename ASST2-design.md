@@ -131,3 +131,14 @@ The process structure (excluding existing fields) so far should be something lik
 - p\_sleeplock (for exclusive access to its structure)
 - p\_parent
 - p\_children
+
+## Orphan handling
+In Unix if a process terminates before its children do, the latter should be allowed to continue execution.
+
+To facilitate that orphans get attched to init process as its new children who reaps them as needed.
+
+That is an option, but I would instead opt to use a specifically designated process that gets created during system startup.
+
+The reason for that is the ease of implementation.
+
+Its easier to make a dedicated process for garbage collection, than change up kernel process.

@@ -50,15 +50,5 @@ int main(int argc, char **argv)
     (void)argc;
     (void)argv;
 
-    pid_t pid = fork();
-
-    if (pid == 0) {
-        _exit(0);
-    } else {
-        if (waitpid(pid, NULL, 0) < 0) {
-            return 4/argc;
-        }
-    }
-
-	return 0;
+	return 4/argc;
 }

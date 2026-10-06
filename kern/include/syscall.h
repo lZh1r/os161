@@ -67,6 +67,7 @@ int sys_waitpid(pid_t pid, userptr_t status, int options);
 int sys_execv(userptr_t progname, userptr_t argv);
 
 /* fs side */
-int sys_open(char *path, int openflags, mode_t mode);
+int sys_open(userptr_t path, int openflags, mode_t mode, int *ret);
+int sys_close(int fd);
 
 #endif /* _SYSCALL_H_ */

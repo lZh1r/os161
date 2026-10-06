@@ -6,12 +6,55 @@
 #include <kern/errno.h>
 #include <synch.h>
 
+static
+int
+get_free_fd(struct proc *proc) {
+    int result;
+    lock_acquire(proc->p_sleeplock);
+    unsigned amount = openfile_array_num(proc->p_fdtable);
+    result = -1;
+    for (unsigned i = 0; i < amount; i++) {
+        if (openfile_array_get(proc->p_fdtable, i) == NULL) {
+            result = (int) i;
+            break;
+        }
+    }
+    lock_release(proc->p_sleeplock);
+    return result;
+}
+
+static
+void
+release_fd(struct proc *proc, int fd) {
+    int index = fd;
+
+    lock_acquire(proc->p_sleeplock);
+
+    unsigned length = openfile_array_num(proc->p_fdtable);
+
+    if ((unsigned) fd == length - 1) {
+        struct openfile *value;
+        do {
+            openfile_array_remove(proc->p_fdtable, (unsigned) index);
+            index--;
+            if (index < 0) {
+                break;
+            }
+            
+        } while ((value = openfile_array_get(proc->p_fdtable, index)) == NULL);
+    } else {
+        openfile_array_set(proc->p_fdtable, index, NULL);
+    }
+
+    lock_release(proc->p_sleeplock);
+}
+
 /*
  * Open a file and add a file descriptor to the descriptor table of process proc.
  * Returns 0 on success, otherwise an error code.
  */
 int
-proc_open(struct proc *proc, char *path, int openflags, mode_t mode, unsigned *index) {
+proc_open(struct proc *proc, char *path, int openflags, mode_t mode, int *ret) {
     if (openfile_array_num(proc->p_fdtable) >= 1024) {
         return EMFILE;
     }
@@ -39,7 +82,28 @@ proc_open(struct proc *proc, char *path, int openflags, mode_t mode, unsigned *i
     openfile->of_refcount = 1;
     openfile->of_openflags = openflags;
 
-    openfile_array_add(proc->p_fdtable, openfile, index);
+    int fd = get_free_fd(proc);
+    if (fd < 0) {
+        openfile_array_add(proc->p_fdtable, openfile, (unsigned *)ret);
+    } else {
+        *ret = fd;
+        openfile_array_set(proc->p_fdtable, (unsigned)fd, openfile);
+    }
+
+    return 0;
+}
+
+int
+proc_close(struct proc *proc, int fd) {
+    lock_acquire(proc->p_sleeplock);
+    unsigned num = openfile_array_num(proc->p_fdtable);
+    if (fd < 0 || (unsigned)fd >= num) {
+        return 1;
+    }
+    struct openfile *of = openfile_array_get(proc->p_fdtable, (unsigned)fd);
+    of_decref(of);
+    lock_release(proc->p_sleeplock);
+    release_fd(proc, fd);
 
     return 0;
 }
@@ -48,12 +112,14 @@ proc_open(struct proc *proc, char *path, int openflags, mode_t mode, unsigned *i
 void
 proc_free_fdtable(struct proc *proc) {
     KASSERT(proc != NULL);
+    lock_acquire(proc->p_sleeplock);
     unsigned num = openfile_array_num(proc->p_fdtable);
     for (unsigned i = 0; i < num; i++) {
         struct openfile *of = openfile_array_get(proc->p_fdtable, 0);
         of_decref(of);
         openfile_array_remove(proc->p_fdtable, 0);
     }
+    lock_release(proc->p_sleeplock);
 }
 
 void
@@ -63,6 +129,7 @@ of_decref(struct openfile *of) {
     lock_release(of->of_lock);
     if (of->of_refcount == 0) {
         vfs_close(of->of_vn);
+        lock_destroy(of->of_lock);
         kfree(of);
     }
 }

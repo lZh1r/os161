@@ -178,8 +178,10 @@ void of_decref(struct openfile *of);
 void of_incref(struct openfile *of);
 
 /* Open a file and add a file descriptor to the proc's fdtable */
-int proc_open(struct proc *proc, char *path, int openflags, mode_t mode, unsigned *index);
+int proc_open(struct proc *proc, char *path, int openflags, mode_t mode, int *ret);
 /* Remove all of the entries from the proc's fdtable and decrement their reference count. */
 void proc_free_fdtable(struct proc *proc);
+/* Close a file descriptor fd for process proc */
+int proc_close(struct proc *proc, int fd);
 
 #endif /* _PROC_H_ */

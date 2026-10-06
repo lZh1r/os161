@@ -140,3 +140,29 @@ of_incref(struct openfile *of) {
     of->of_refcount++;
     lock_release(of->of_lock);
 }
+
+int
+proc_write(struct proc *proc, int fd, struct uio *uio, size_t *ret) {
+    lock_acquire(proc->p_sleeplock);
+    unsigned num = openfile_array_num(proc->p_fdtable);
+    if (fd < 0 || (unsigned)fd >= num) {
+        return EBADF;
+    }
+    struct openfile *of = openfile_array_get(proc->p_fdtable, (unsigned)fd);
+    if (of == NULL) {
+        return EBADF;
+    }
+    lock_acquire(of->of_lock);
+    size_t before = uio->uio_resid;
+    uio->uio_offset = of->of_seekpos;
+    int result = VOP_WRITE(of->of_vn, uio);
+    if (result) {
+        return result;
+    }
+    size_t written = before - uio->uio_resid;
+    *ret = written;
+    of->of_seekpos += written;
+    lock_release(of->of_lock);
+    lock_release(proc->p_sleeplock);
+    return 0;
+}

@@ -40,6 +40,7 @@
 #include <synch.h>
 #include <array.h>
 #include <syscall.h>
+#include <uio.h>
 
 #define PROC_MAX_ID 1024
 #define PROC_MAX_FD 1024
@@ -169,7 +170,7 @@ struct openfile {
     // underlying vnode
     struct vnode *of_vn;
     // seek position
-    unsigned of_seekpos;
+    size_t of_seekpos;
     // open flags
     int of_openflags;
 };
@@ -183,5 +184,7 @@ int proc_open(struct proc *proc, char *path, int openflags, mode_t mode, int *re
 void proc_free_fdtable(struct proc *proc);
 /* Close a file descriptor fd for process proc */
 int proc_close(struct proc *proc, int fd);
+/* Write to a file specified under file descriptor fd */
+int proc_write(struct proc *proc, int fd, struct uio *uio, size_t *ret);
 
 #endif /* _PROC_H_ */

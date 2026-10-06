@@ -50,6 +50,8 @@
 #include <current.h>
 #include <addrspace.h>
 #include <vnode.h>
+#include <kern/errno.h>
+#include <kern/fcntl.h>
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
@@ -62,6 +64,7 @@ struct proc *kproc;
 struct proc_array *proc_table;
 
 struct rwlock *proc_table_lock;
+
 
 /*
  * Get a free process id in the process table
@@ -198,6 +201,18 @@ proc_create(const char *name)
     }
     proc_array_init(proc->p_children);
 
+    proc->p_fdtable = openfile_array_create();
+    if (proc->p_fdtable == NULL) {
+        proc_array_cleanup(proc->p_children);
+        proc_array_destroy(proc->p_children);
+        cv_destroy(proc->p_cv);
+        lock_destroy(proc->p_sleeplock);
+		kfree(proc->p_name);
+		kfree(proc);
+        return NULL;
+    }
+    openfile_array_init(proc->p_fdtable);
+
 	proc->p_numthreads = 0;
 	spinlock_init(&proc->p_lock);
 
@@ -327,7 +342,11 @@ proc_destroy(struct proc *proc)
 	KASSERT(proc->p_numthreads == 0);
 	spinlock_cleanup(&proc->p_lock);
 
+    proc_free_fdtable(proc);
     proc_array_cleanup(proc->p_children);
+    proc_array_destroy(proc->p_children);
+    openfile_array_cleanup(proc->p_fdtable);
+    openfile_array_destroy(proc->p_fdtable);
     lock_destroy(proc->p_sleeplock);
     cv_destroy(proc->p_cv);
 	kfree(proc->p_name);
@@ -380,6 +399,27 @@ proc_create_runprogram(const char *name)
 	newproc->p_addrspace = NULL;
 
 	/* VFS fields */
+
+    /* file descriptors init */
+    int result;
+    char in_path[] = "con:";
+    char out_path[] = "con:";
+    char err_path[] = "con:";
+    if ((result = proc_open(newproc, in_path, O_RDONLY, 0, NULL))) {
+        newproc->p_status = PROC_DESTROY;
+        proc_destroy(newproc);
+        return NULL;
+    } // stdin
+    if ((result = proc_open(newproc, out_path, O_WRONLY, 0, NULL))) {
+        newproc->p_status = PROC_DESTROY;
+        proc_destroy(newproc);
+        return NULL;
+    } // stdout
+    if ((result = proc_open(newproc, err_path, O_WRONLY, 0, NULL))) {
+        newproc->p_status = PROC_DESTROY;
+        proc_destroy(newproc);
+        return NULL;
+    } // sterr
 
 	/*
 	 * Lock the current process to copy its current directory.
@@ -596,3 +636,4 @@ proc_fork(struct trapframe *tf) {
 
     return new_proc;
 }
+

@@ -139,6 +139,10 @@ common_prog(int nargs, char **args)
 		return result;
 	}
 
+    int code = proc_wait(proc);
+
+    kprintf("Process exited with status %d\n", code);
+
 	/*
 	 * The new process will be destroyed when the program exits...
 	 * once you write the code for handling that.

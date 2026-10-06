@@ -58,9 +58,15 @@ __DEAD void enter_new_process(int argc, userptr_t argv, userptr_t env,
 
 int sys_reboot(int code);
 int sys___time(userptr_t user_seconds, userptr_t user_nanoseconds);
+
+/* process side */
 int sys_fork(struct trapframe *tf, int *retval);
 int sys__exit(int code);
 pid_t sys_getpid(void);
 int sys_waitpid(pid_t pid, userptr_t status, int options);
+int sys_execv(userptr_t progname, userptr_t argv);
+
+/* fs side */
+int sys_open(char *path, int openflags, mode_t mode);
 
 #endif /* _SYSCALL_H_ */

@@ -56,3 +56,10 @@ sys_waitpid(pid_t pid, userptr_t status, int options) {
     
     return 0;
 }
+
+int
+sys_execv(userptr_t progname, userptr_t argv) {
+    (void)progname;
+    (void)argv;
+    return 0;
+}

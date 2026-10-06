@@ -50,7 +50,10 @@
 #endif
 
 DECLARRAY_BYTYPE(proc_array, struct proc, PROC_INLINE);
-DEFARRAY_BYTYPE(proc_array, struct proc, PROC_INLINE)
+DEFARRAY_BYTYPE(proc_array, struct proc, PROC_INLINE);
+
+DECLARRAY_BYTYPE(openfile_array, struct openfile, PROC_INLINE);
+DEFARRAY_BYTYPE(openfile_array, struct openfile, PROC_INLINE);
 
 struct addrspace;
 struct thread;
@@ -112,6 +115,8 @@ struct proc {
     struct proc *p_parent; /* pointer to the parent process */
 
     struct proc_array *p_children; /* array of child struct proc pointers */
+
+    struct openfile_array *p_fdtable; /* file descriptor table */
 };
 
 /* This is the process structure for the kernel and for kernel-only threads. */
@@ -152,5 +157,29 @@ struct proc *proc_get_by_id(pid_t pid);
 struct proc *proc_create(const char *);
 
 struct proc *proc_fork(struct trapframe *tf);
+
+/* 
+ * A struct representing an open file which file descriptors point to.
+ * Basically a vnode wrapper
+ */
+struct openfile {
+    struct lock *of_lock;
+    // reference counter for this structure
+    int of_refcount;
+    // underlying vnode
+    struct vnode *of_vn;
+    // seek position
+    unsigned of_seekpos;
+    // open flags
+    int of_openflags;
+};
+
+void of_decref(struct openfile *of);
+void of_incref(struct openfile *of);
+
+/* Open a file and add a file descriptor to the proc's fdtable */
+int proc_open(struct proc *proc, char *path, int openflags, mode_t mode, unsigned *index);
+/* Remove all of the entries from the proc's fdtable and decrement their reference count. */
+void proc_free_fdtable(struct proc *proc);
 
 #endif /* _PROC_H_ */

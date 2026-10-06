@@ -631,6 +631,14 @@ proc_fork(struct trapframe *tf) {
     as_copy(proc_getas(), &as);
 
     new_proc->p_addrspace = as;
+    
+    lock_acquire(curproc->p_sleeplock);
+    unsigned len = openfile_array_num(curproc->p_fdtable);
+    for (unsigned i = 0; i < len; i++) {
+        struct openfile *of = openfile_array_get(curproc->p_fdtable, i);
+        openfile_array_add(new_proc->p_fdtable, of, NULL);
+    }
+    lock_release(curproc->p_sleeplock);
 
     thread_fork("user thread", new_proc, enter_forked_process, tf, 0);
 

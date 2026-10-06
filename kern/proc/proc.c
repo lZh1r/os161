@@ -52,6 +52,7 @@
 #include <vnode.h>
 #include <kern/errno.h>
 #include <kern/fcntl.h>
+#include <kern/wait.h>
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
@@ -236,7 +237,7 @@ proc_create(const char *name)
         lock_release(curproc->p_sleeplock);
     }
 
-    proc->p_exitcode = 0;
+    proc->p_exitcode = _MKWAIT_EXIT(0);
     proc->p_status = PROC_NEW;
     pid_t new_id = proc_get_free_id();
     
@@ -599,20 +600,23 @@ proc_exit(int exitcode) {
 
     lock_acquire(curproc->p_sleeplock);
     curproc->p_status = PROC_EXIT;
-    curproc->p_exitcode = exitcode;
+    curproc->p_exitcode = _MKWAIT_EXIT(exitcode);
 
     unsigned child_amount = proc_array_num(curproc->p_children);
     if (child_amount > 0) {
-        for (unsigned i = 0; i < child_amount; i++) {
-            struct proc *p = proc_array_get(curproc->p_children, i);
+        for (unsigned i = child_amount; i > 0; i--) {
+            struct proc *p = proc_array_get(curproc->p_children, i - 1);
             lock_acquire(p->p_sleeplock);
             p->p_parent = kproc;
             lock_release(p->p_sleeplock);
+            proc_array_remove(curproc->p_children, i - 1);
         }
     }
 
-    cv_signal(curproc->p_cv, curproc->p_sleeplock);
-    lock_release(curproc->p_sleeplock);
+    struct proc *p = curproc;
+    proc_remthread(curthread);
+    cv_signal(p->p_cv, p->p_sleeplock);
+    lock_release(p->p_sleeplock);
     thread_exit();
     panic("THE ZOMBIES ATE YOUR BRAINS!");
 }
@@ -636,6 +640,7 @@ proc_fork(struct trapframe *tf) {
     unsigned len = openfile_array_num(curproc->p_fdtable);
     for (unsigned i = 0; i < len; i++) {
         struct openfile *of = openfile_array_get(curproc->p_fdtable, i);
+        of_incref(of);
         openfile_array_add(new_proc->p_fdtable, of, NULL);
     }
     lock_release(curproc->p_sleeplock);

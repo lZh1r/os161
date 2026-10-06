@@ -140,8 +140,8 @@ common_prog(int nargs, char **args)
 	}
 
     int code = proc_wait(proc);
-
-    kprintf("Process exited with status %d\n", code);
+    (void)code;
+    //kprintf("Process exited with status %d\n", code);
 
 	/*
 	 * The new process will be destroyed when the program exits...

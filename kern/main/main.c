@@ -72,6 +72,24 @@ static const char harvard_copyright[] =
     "Copyright (c) 2000, 2001-2005, 2008-2011, 2013, 2014\n"
     "   President and Fellows of Harvard College.  All rights reserved.\n";
 
+/* Reaper process entrypoint */
+static
+void
+reaper_thread(void *junk1, unsigned long junk2) {
+    (void)junk1;
+    (void)junk2;
+    return;
+    while (1) {
+        lock_acquire(curproc->p_sleeplock);
+        unsigned num = proc_array_num(curproc->p_children);
+        for (unsigned i = 0; i < num; i++) {
+            struct proc *child = proc_array_get(curproc->p_children, i);
+            proc_wait(child, true);
+        }
+        lock_release(curproc->p_sleeplock);
+        thread_yield();
+    }
+}
 
 /*
  * Initial boot sequence.
@@ -108,7 +126,7 @@ boot(void)
 
 	/* Early initialization. */
 	ram_bootstrap();
-	proc_bootstrap();
+	struct proc *reaper = proc_bootstrap();
 	thread_bootstrap();
 	hardclock_bootstrap();
 	vfs_bootstrap();
@@ -140,6 +158,10 @@ boot(void)
 	 */
 	COMPILE_ASSERT(sizeof(userptr_t) == sizeof(char *));
 	COMPILE_ASSERT(sizeof(*(userptr_t)0) == sizeof(char));
+
+    if (thread_fork("reaper thread", reaper, reaper_thread, NULL, 0)) {
+        panic("thread_fork for reaper thread failed");
+    }
 }
 
 /*

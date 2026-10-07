@@ -124,7 +124,7 @@ struct proc {
 extern struct proc *kproc;
 
 /* Call once during system startup to allocate data structures. */
-void proc_bootstrap(void);
+struct proc *proc_bootstrap(void);
 
 /* Create a fresh process for use by runprogram(). */
 struct proc *proc_create_runprogram(const char *name);
@@ -148,7 +148,7 @@ struct addrspace *proc_setas(struct addrspace *);
 void proc_exit(int exitcode);
 
 /* Wait for a process to exit, cleaning up after it */
-int proc_wait(struct proc *proc);
+int proc_wait(struct proc *proc, bool nohang);
 
 pid_t proc_get_free_id(void);
 unsigned proc_get_proc_amount(void);

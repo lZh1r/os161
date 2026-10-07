@@ -60,6 +60,11 @@
 struct proc *kproc;
 
 /*
+ * The process which reaps all of the orphans.
+ */
+struct proc *reaper;
+
+/*
  * The table for getting processes by their id
  */
 struct proc_array *proc_table;
@@ -357,7 +362,7 @@ proc_destroy(struct proc *proc)
 /*
  * Create the process structure for the kernel.
  */
-void
+struct proc *
 proc_bootstrap(void)
 {
     proc_table = proc_array_create();
@@ -377,6 +382,13 @@ proc_bootstrap(void)
 	if (kproc == NULL) {
 		panic("proc_create for kproc failed\n");
 	}
+
+    reaper = proc_create("[reaper]");
+    if (reaper == NULL) {
+        panic("proc_create for reaper failed\n");
+    }
+
+    return reaper;
 }
 
 /*
@@ -538,9 +550,10 @@ proc_setas(struct addrspace *newas)
 /*
  * Wait for another process to exit.
  * Returns the exitcode of the proc or -1 on failure.
+ * If nohang is true and proc is still executing -2 is returned.
  */
 int
-proc_wait(struct proc *proc)
+proc_wait(struct proc *proc, bool nohang)
 {
     int code;
     pid_t exit_pid;
@@ -554,6 +567,10 @@ proc_wait(struct proc *proc)
     lock_acquire(child_lock);
 
     while(proc->p_status != PROC_EXIT) {
+        if (nohang) {
+            lock_release(child_lock);
+            return -2;
+        }
         cv_wait(proc->p_cv, child_lock);
     }
     proc->p_status = PROC_DESTROY;
@@ -607,7 +624,7 @@ proc_exit(int exitcode) {
         for (unsigned i = child_amount; i > 0; i--) {
             struct proc *p = proc_array_get(curproc->p_children, i - 1);
             lock_acquire(p->p_sleeplock);
-            p->p_parent = kproc;
+            p->p_parent = reaper;
             lock_release(p->p_sleeplock);
             proc_array_remove(curproc->p_children, i - 1);
         }

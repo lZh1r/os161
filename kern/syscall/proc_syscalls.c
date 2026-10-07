@@ -48,7 +48,7 @@ sys_waitpid(pid_t pid, userptr_t status, int options) {
         return ECHILD;
     }
 
-    int exitcode = proc_wait(target);
+    int exitcode = proc_wait(target, false);
 
     if (status != NULL && copyout(&exitcode, status, sizeof(exitcode))) {
         return EFAULT;

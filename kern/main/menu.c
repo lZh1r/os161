@@ -139,7 +139,7 @@ common_prog(int nargs, char **args)
 		return result;
 	}
 
-    int code = proc_wait(proc);
+    int code = proc_wait(proc, false);
     (void)code;
     //kprintf("Process exited with status %d\n", code);
 

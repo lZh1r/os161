@@ -34,17 +34,17 @@ procidtest_internal() {
         proc_array_add(curproc->p_children, procs[i], NULL);
     }
 
-    proc_wait(procs[NPROCS - 1]);
+    proc_wait(procs[NPROCS - 1], false);
 
     failif(proc_get_free_id() != -1);
 
-    proc_wait(procs[0]);
+    proc_wait(procs[0], false);
 
     // 0 is kproc
     failif(proc_get_free_id() != 1);
 
     for (int i = 1; i < NPROCS - 1; i++) {
-        proc_wait(procs[i]);
+        proc_wait(procs[i], false);
     }
 }
 

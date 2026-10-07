@@ -39,3 +39,19 @@ sys_write(int fd, userptr_t buf, size_t len, size_t *ret) {
     u.uio_space = proc_getas();
     return proc_write(curproc, fd, &u, ret);
 }
+
+int
+sys_read(int fd, userptr_t buf, size_t len, size_t *ret) {
+    struct iovec iov;
+    struct uio u;
+    iov.iov_ubase = buf;
+    iov.iov_len = len;
+    u.uio_iov = &iov;
+    u.uio_iovcnt = 1;
+    u.uio_offset = 0; // set it later
+    u.uio_resid = len;
+    u.uio_segflg = UIO_USERSPACE;
+    u.uio_rw = UIO_READ;
+    u.uio_space = proc_getas();
+    return proc_read(curproc, fd, &u, ret);
+}

@@ -186,5 +186,6 @@ void proc_free_fdtable(struct proc *proc);
 int proc_close(struct proc *proc, int fd);
 /* Write to a file specified under file descriptor fd */
 int proc_write(struct proc *proc, int fd, struct uio *uio, size_t *ret);
+int proc_read(struct proc *proc, int fd, struct uio *uio, size_t *ret);
 
 #endif /* _PROC_H_ */

@@ -70,5 +70,6 @@ int sys_execv(userptr_t progname, userptr_t argv);
 int sys_open(userptr_t path, int openflags, mode_t mode, int *ret);
 int sys_close(int fd);
 int sys_write(int fd, userptr_t buf, size_t len, size_t *ret);
+int sys_read(int fd, userptr_t buf, size_t len, size_t *ret);
 
 #endif /* _SYSCALL_H_ */

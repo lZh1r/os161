@@ -5,6 +5,7 @@
 #include <current.h>
 #include <copyinout.h>
 #include <limits.h>
+#include <vfs.h>
 
 int
 sys_close(int fd) {
@@ -54,4 +55,13 @@ sys_read(int fd, userptr_t buf, size_t len, size_t *ret) {
     u.uio_rw = UIO_READ;
     u.uio_space = proc_getas();
     return proc_read(curproc, fd, &u, ret);
+}
+
+int
+sys_chdir(const userptr_t pathname) {
+    char kpath[PATH_MAX];
+    if (copyinstr(pathname, kpath, PATH_MAX, NULL)) {
+        return EFAULT;
+    }
+    return vfs_chdir(kpath);
 }

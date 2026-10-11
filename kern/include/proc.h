@@ -42,8 +42,8 @@
 #include <syscall.h>
 #include <uio.h>
 
-#define PROC_MAX_ID 1024
-#define PROC_MAX_FD 1024
+#define PROC_MAX_ID 1023
+#define PROC_MAX_FD 1023
 #define PROC_MAX_CHILDREN 32
 
 #ifndef PROC_INLINE
@@ -186,6 +186,9 @@ void proc_free_fdtable(struct proc *proc);
 int proc_close(struct proc *proc, int fd);
 /* Write to a file specified under file descriptor fd */
 int proc_write(struct proc *proc, int fd, struct uio *uio, size_t *ret);
+/* Read syscall backend */
 int proc_read(struct proc *proc, int fd, struct uio *uio, size_t *ret);
+/* Dup2 support */
+int proc_dup2(int oldfd, int newfd);
 
 #endif /* _PROC_H_ */

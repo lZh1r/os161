@@ -66,7 +66,8 @@ sys_chdir(const userptr_t pathname) {
     return vfs_chdir(kpath);
 }
 
-int sys___getcwd(userptr_t buf, size_t len, size_t *ret) {
+int
+sys___getcwd(userptr_t buf, size_t len, size_t *ret) {
     struct iovec iov;
     struct uio u;
     iov.iov_ubase = buf;
@@ -85,4 +86,13 @@ int sys___getcwd(userptr_t buf, size_t len, size_t *ret) {
     }
     *ret = u.uio_offset;
     return 0;
+}
+
+int
+sys_dup2(int oldfd, int newfd) {
+    // micro optimization
+    if (oldfd >= 0 && newfd >= 0 && oldfd == newfd) {
+        return 0;
+    }
+    return proc_dup2(oldfd, newfd);
 }

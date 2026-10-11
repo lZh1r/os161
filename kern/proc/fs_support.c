@@ -9,9 +9,12 @@
 
 static
 int
-get_free_fd(struct proc *proc) {
+get_free_fd(struct proc *proc, bool locked) {
     int result;
-    lock_acquire(proc->p_sleeplock);
+    // We did not hold the lock when entering this function
+    if (!locked) {
+        lock_acquire(proc->p_sleeplock);
+    }
     unsigned amount = openfile_array_num(proc->p_fdtable);
     result = -1;
     for (unsigned i = 0; i < amount; i++) {
@@ -20,7 +23,9 @@ get_free_fd(struct proc *proc) {
             break;
         }
     }
-    lock_release(proc->p_sleeplock);
+    if (!locked) {
+        lock_release(proc->p_sleeplock);
+    }
     return result;
 }
 
@@ -56,12 +61,15 @@ release_fd(struct proc *proc, int fd) {
  */
 int
 proc_open(struct proc *proc, char *path, int openflags, mode_t mode, int *ret) {
-    if (openfile_array_num(proc->p_fdtable) >= 1024) {
+    lock_acquire(proc->p_sleeplock);
+    if (openfile_array_num(proc->p_fdtable) >= PROC_MAX_FD) {
+        lock_release(proc->p_sleeplock);
         return EMFILE;
     }
 
     struct openfile *openfile = kmalloc(sizeof(struct openfile));
     if (openfile == NULL) {
+        lock_release(proc->p_sleeplock);
         return EMFILE;
     }
     
@@ -70,6 +78,7 @@ proc_open(struct proc *proc, char *path, int openflags, mode_t mode, int *ret) {
     int result = vfs_open(path, openflags, mode, &vn);
     if (result) {
         kfree(openfile);
+        lock_release(proc->p_sleeplock);
         return result;
     }
 
@@ -77,19 +86,22 @@ proc_open(struct proc *proc, char *path, int openflags, mode_t mode, int *ret) {
     if (openfile->of_lock == NULL) {
         vfs_close(vn);
         kfree(openfile);
+        lock_release(proc->p_sleeplock);
+        return EMFILE;
     }
     openfile->of_vn = vn;
     openfile->of_seekpos = 0;
     openfile->of_refcount = 1;
     openfile->of_openflags = openflags;
 
-    int fd = get_free_fd(proc);
+    int fd = get_free_fd(proc, true);
     if (fd < 0) {
         openfile_array_add(proc->p_fdtable, openfile, (unsigned *)ret);
     } else {
         *ret = fd;
         openfile_array_set(proc->p_fdtable, (unsigned)fd, openfile);
     }
+    lock_release(proc->p_sleeplock);
 
     return 0;
 }
@@ -211,5 +223,40 @@ proc_read(struct proc *proc, int fd, struct uio *uio, size_t *ret) {
     of->of_seekpos += read;
     lock_release(of->of_lock);
     lock_release(proc->p_sleeplock);
+    return 0;
+}
+
+int
+proc_dup2(int oldfd, int newfd) {
+    if (newfd > PROC_MAX_FD || newfd < 0 || oldfd < 0) {
+        return EBADF;
+    }
+
+    lock_acquire(curproc->p_sleeplock);
+    struct openfile *old = openfile_array_get(curproc->p_fdtable, oldfd);
+    if (old == NULL) {
+        lock_release(curproc->p_sleeplock);
+        return EBADF;
+    }
+
+    unsigned num = openfile_array_num(curproc->p_fdtable);
+    /* we need to allocate all of the empty entried in between (I cry) */
+    if ((unsigned)newfd >= num) {
+        while (num != (unsigned)newfd) {
+            if (openfile_array_add(curproc->p_fdtable, NULL, &num)) {
+                lock_release(curproc->p_sleeplock);
+                return EMFILE;
+            }
+        }
+        num++;
+    }
+    struct openfile *new = openfile_array_get(curproc->p_fdtable, newfd);
+    if (new != NULL) {
+        of_decref(new);
+    }
+    openfile_array_set(curproc->p_fdtable, newfd, old);
+    of_incref(old);
+
+    lock_release(curproc->p_sleeplock);
     return 0;
 }

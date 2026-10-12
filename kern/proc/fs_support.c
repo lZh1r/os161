@@ -6,6 +6,8 @@
 #include <kern/errno.h>
 #include <synch.h>
 #include <kern/fcntl.h>
+#include <kern/seek.h>
+#include <kern/stat.h>
 
 static
 int
@@ -257,6 +259,55 @@ proc_dup2(int oldfd, int newfd) {
     openfile_array_set(curproc->p_fdtable, newfd, old);
     of_incref(old);
 
+    lock_release(curproc->p_sleeplock);
+    return 0;
+}
+
+int
+proc_lseek(int fd, off_t offset, int whence, off_t *ret) {
+    lock_acquire(curproc->p_sleeplock);
+    unsigned num = openfile_array_num(curproc->p_fdtable);
+    if ((unsigned)fd >= num) {
+        lock_release(curproc->p_sleeplock);
+        return EBADF;
+    }
+    struct openfile *of = openfile_array_get(curproc->p_fdtable, (unsigned)fd);
+    lock_acquire(of->of_lock);
+    if (!VOP_ISSEEKABLE(of->of_vn)) {
+        lock_release(of->of_lock);
+        lock_release(curproc->p_sleeplock);
+        return ESPIPE;
+    }
+    off_t newpos;
+    switch (whence) {
+        case SEEK_END:
+        (void)1;
+        struct stat st;
+        if (VOP_STAT(of->of_vn, &st)) {
+            newpos = -1;
+        } else {
+            newpos = st.st_size + offset;
+        }
+        break;
+        case SEEK_SET:
+        newpos = offset;
+        break;
+        case SEEK_CUR:
+        newpos = offset + of->of_seekpos;
+        break;
+        // invalid whence
+        default:
+        newpos = -1;
+        break;
+    }
+    if (newpos < 0) {
+        lock_release(of->of_lock);
+        lock_release(curproc->p_sleeplock);
+        return EINVAL;
+    }
+    of->of_seekpos = newpos;
+    *ret = newpos;
+    lock_release(of->of_lock);
     lock_release(curproc->p_sleeplock);
     return 0;
 }

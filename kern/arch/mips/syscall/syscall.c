@@ -35,6 +35,8 @@
 #include <thread.h>
 #include <current.h>
 #include <syscall.h>
+#include <endian.h>
+#include <copyinout.h>
 
 
 /*
@@ -166,8 +168,25 @@ syscall(struct trapframe *tf)
 
         case SYS_dup2:
         err = sys_dup2(tf->tf_a0, tf->tf_a1);
-        if (err == 0) {
+        if (!err) {
             retval = tf->tf_a1;
+        }
+        break;
+
+        case SYS_lseek:
+        (void) 1;
+        uint64_t ret, offset;
+        int whence;
+        int result = copyin((userptr_t)(tf->tf_sp + 16), &whence, sizeof(int));
+        if (result) {
+            err = EINVAL;
+        } else {
+            // reassemble the offset from 2 registers
+            join32to64(tf->tf_a2, tf->tf_a3, &offset);
+            err = sys_lseek(tf->tf_a0, (off_t)offset, whence, (off_t *)&ret);
+            if (!err) {
+                split64to32(ret, (uint32_t *)&retval, &tf->tf_v1);
+            }
         }
         break;
 

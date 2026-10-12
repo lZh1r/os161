@@ -170,7 +170,7 @@ struct openfile {
     // underlying vnode
     struct vnode *of_vn;
     // seek position
-    size_t of_seekpos;
+    off_t of_seekpos;
     // open flags
     int of_openflags;
 };
@@ -190,5 +190,7 @@ int proc_write(struct proc *proc, int fd, struct uio *uio, size_t *ret);
 int proc_read(struct proc *proc, int fd, struct uio *uio, size_t *ret);
 /* Dup2 support */
 int proc_dup2(int oldfd, int newfd);
+/* lseek support */
+int proc_lseek(int fd, off_t offset, int whence, off_t *ret);
 
 #endif /* _PROC_H_ */

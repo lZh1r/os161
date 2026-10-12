@@ -96,3 +96,11 @@ sys_dup2(int oldfd, int newfd) {
     }
     return proc_dup2(oldfd, newfd);
 }
+
+int
+sys_lseek(int fd, off_t offset, int whence, off_t *ret) {
+    if (fd < 0) {
+        return EBADF;
+    }
+    return proc_lseek(fd, offset, whence, ret);
+}

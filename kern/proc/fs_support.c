@@ -137,7 +137,9 @@ proc_free_fdtable(struct proc *proc) {
     unsigned num = openfile_array_num(proc->p_fdtable);
     for (unsigned i = 0; i < num; i++) {
         struct openfile *of = openfile_array_get(proc->p_fdtable, 0);
-        of_decref(of);
+        if (of != NULL) {
+            of_decref(of);
+        }
         openfile_array_remove(proc->p_fdtable, 0);
     }
     lock_release(proc->p_sleeplock);

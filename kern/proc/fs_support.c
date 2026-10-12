@@ -170,7 +170,7 @@ proc_write(struct proc *proc, int fd, struct uio *uio, size_t *ret) {
         return EBADF;
     }
     lock_acquire(of->of_lock);
-    int accessmode = of->of_openflags && O_ACCMODE;
+    int accessmode = of->of_openflags & O_ACCMODE;
     if (!(accessmode == O_WRONLY || accessmode == O_RDWR)) {
         lock_release(of->of_lock);
         lock_release(proc->p_sleeplock);
@@ -206,7 +206,7 @@ proc_read(struct proc *proc, int fd, struct uio *uio, size_t *ret) {
         return EBADF;
     }
     lock_acquire(of->of_lock);
-    int accessmode = of->of_openflags && O_ACCMODE;
+    int accessmode = of->of_openflags & O_ACCMODE;
     if (!(accessmode == O_RDONLY || accessmode == O_RDWR)) {
         lock_release(of->of_lock);
         lock_release(proc->p_sleeplock);

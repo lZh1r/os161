@@ -33,10 +33,13 @@ get_free_fd(struct proc *proc, bool locked) {
 
 static
 void
-release_fd(struct proc *proc, int fd) {
+release_fd(struct proc *proc, int fd, bool locked) {
     int index = fd;
 
-    lock_acquire(proc->p_sleeplock);
+    // We did not hold the lock when entering this function
+    if (!locked) {
+        lock_acquire(proc->p_sleeplock);
+    }
 
     unsigned length = openfile_array_num(proc->p_fdtable);
 
@@ -54,7 +57,9 @@ release_fd(struct proc *proc, int fd) {
         openfile_array_set(proc->p_fdtable, index, NULL);
     }
 
-    lock_release(proc->p_sleeplock);
+    if (!locked) {
+        lock_release(proc->p_sleeplock);
+    }
 }
 
 /*
@@ -113,12 +118,13 @@ proc_close(struct proc *proc, int fd) {
     lock_acquire(proc->p_sleeplock);
     unsigned num = openfile_array_num(proc->p_fdtable);
     if (fd < 0 || (unsigned)fd >= num) {
-        return 1;
+        lock_release(proc->p_sleeplock);
+        return EBADF;
     }
     struct openfile *of = openfile_array_get(proc->p_fdtable, (unsigned)fd);
     of_decref(of);
+    release_fd(proc, fd, true);
     lock_release(proc->p_sleeplock);
-    release_fd(proc, fd);
 
     return 0;
 }
@@ -235,13 +241,19 @@ proc_dup2(int oldfd, int newfd) {
     }
 
     lock_acquire(curproc->p_sleeplock);
+    unsigned num = openfile_array_num(curproc->p_fdtable);
+
+    if ((unsigned)oldfd >= num) {
+        lock_release(curproc->p_sleeplock);
+        return EBADF;
+    }
+
     struct openfile *old = openfile_array_get(curproc->p_fdtable, oldfd);
     if (old == NULL) {
         lock_release(curproc->p_sleeplock);
         return EBADF;
     }
 
-    unsigned num = openfile_array_num(curproc->p_fdtable);
     /* we need to allocate all of the empty entried in between (I cry) */
     if ((unsigned)newfd >= num) {
         while (num != (unsigned)newfd) {

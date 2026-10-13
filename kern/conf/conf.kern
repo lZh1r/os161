@@ -390,6 +390,7 @@ file      syscall/runprogram.c
 file      syscall/time_syscalls.c
 file      syscall/proc_syscalls.c
 file      syscall/fs_syscalls.c
+file      syscall/exec.c
 
 #
 # Startup and initialization

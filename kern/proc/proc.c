@@ -662,6 +662,13 @@ proc_fork(struct trapframe *tf) {
     }
     lock_release(curproc->p_sleeplock);
 
+	spinlock_acquire(&curproc->p_lock);
+	if (curproc->p_cwd != NULL) {
+		VOP_INCREF(curproc->p_cwd);
+		new_proc->p_cwd = curproc->p_cwd;
+	}
+	spinlock_release(&curproc->p_lock);
+
     thread_fork("user thread", new_proc, enter_forked_process, tf, 0);
 
     return new_proc;

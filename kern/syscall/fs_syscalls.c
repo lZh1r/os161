@@ -41,6 +41,7 @@ sys_write(int fd, userptr_t buf, size_t len, size_t *ret) {
     return proc_write(curproc, fd, &u, ret);
 }
 
+/* the same thing as write but in opposite direction */
 int
 sys_read(int fd, userptr_t buf, size_t len, size_t *ret) {
     struct iovec iov;

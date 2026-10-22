@@ -243,7 +243,7 @@ proc_create(const char *name)
     }
 
     proc->p_exitcode = _MKWAIT_EXIT(0);
-    proc->p_status = PROC_NEW;
+    proc->p_status = PROC_ACTIVE;
     pid_t new_id = proc_get_free_id();
     
     // resolve the process id and set the process table entry
@@ -608,7 +608,7 @@ proc_wait(struct proc *proc, bool nohang)
 }
 
 /*
- * Exit with an exit code, abandoning all of the children (they will get adopted by the kernel process)
+ * Exit with an exit code, abandoning all of the children (they will get adopted by the reaper process)
  */
 // does not return
 void

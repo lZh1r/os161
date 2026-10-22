@@ -41,9 +41,10 @@
 #include <array.h>
 #include <syscall.h>
 #include <uio.h>
+#include <limits.h>
 
-#define PROC_MAX_ID 1023
-#define PROC_MAX_FD 1023
+#define PROC_MAX_ID PID_MAX
+#define PROC_MAX_FD OPEN_MAX
 #define PROC_MAX_CHILDREN 32
 
 #ifndef PROC_INLINE

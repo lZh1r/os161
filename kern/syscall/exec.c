@@ -20,8 +20,6 @@ sys_execv(userptr_t progname, userptr_t argv) {
     struct array *offsets;
     struct addrspace *old_as = NULL;
 
-    //kprintf("entered\n");
-
     char *kargv = kmalloc(ARG_MAX);
     if (kargv == NULL) {
         return ENOMEM;
@@ -34,8 +32,6 @@ sys_execv(userptr_t progname, userptr_t argv) {
         kfree(kargv);
         return result;
     }
-
-    //kprintf("progname copied\n");
 
     offsets = array_create();
     array_init(offsets);
@@ -71,8 +67,6 @@ sys_execv(userptr_t progname, userptr_t argv) {
         }
         argc++;
     }
-
-    //kprintf("args copied\n");
 
 	/* Open the file. */
 	result = vfs_open(kpath, O_RDONLY, 0, &v);

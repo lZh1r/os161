@@ -113,6 +113,7 @@ proc_open(struct proc *proc, char *path, int openflags, mode_t mode, int *ret) {
     return 0;
 }
 
+/* close a file descriptor fd and decrement refcount for an underlying openfile */ 
 int
 proc_close(struct proc *proc, int fd) {
     lock_acquire(proc->p_sleeplock);
@@ -145,6 +146,7 @@ proc_free_fdtable(struct proc *proc) {
     lock_release(proc->p_sleeplock);
 }
 
+/* decrement reference count for openfile of, closing the underlying vnode if refcount reaches 0 */
 void
 of_decref(struct openfile *of) {
     lock_acquire(of->of_lock);
@@ -157,6 +159,7 @@ of_decref(struct openfile *of) {
     }
 }
 
+/* increment refcount for openfile of */
 void
 of_incref(struct openfile *of) {
     lock_acquire(of->of_lock);
@@ -164,6 +167,7 @@ of_incref(struct openfile *of) {
     lock_release(of->of_lock);
 }
 
+/* wrapper around VOP_WRITE with accessmode checking, and other validation and bookkeeping */
 int
 proc_write(struct proc *proc, int fd, struct uio *uio, size_t *ret) {
     lock_acquire(proc->p_sleeplock);
@@ -200,6 +204,7 @@ proc_write(struct proc *proc, int fd, struct uio *uio, size_t *ret) {
     return 0;
 }
 
+/* wrapper around VOP_READ with accessmode checking, and other validation and bookkeeping */
 int
 proc_read(struct proc *proc, int fd, struct uio *uio, size_t *ret) {
     lock_acquire(proc->p_sleeplock);
@@ -236,9 +241,10 @@ proc_read(struct proc *proc, int fd, struct uio *uio, size_t *ret) {
     return 0;
 }
 
+/* implemented by effectively closing the newfd and increasing refcount for oldfd */
 int
 proc_dup2(int oldfd, int newfd) {
-    if (newfd > PROC_MAX_FD || newfd < 0 || oldfd < 0) {
+    if (newfd >= PROC_MAX_FD || newfd < 0 || oldfd < 0) {
         return EBADF;
     }
 
@@ -277,6 +283,7 @@ proc_dup2(int oldfd, int newfd) {
     return 0;
 }
 
+/* modify openfile's seek offset based on whence and offset */
 int
 proc_lseek(int fd, off_t offset, int whence, off_t *ret) {
     lock_acquire(curproc->p_sleeplock);

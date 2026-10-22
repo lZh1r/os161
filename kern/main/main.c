@@ -78,7 +78,6 @@ void
 reaper_thread(void *junk1, unsigned long junk2) {
     (void)junk1;
     (void)junk2;
-    return;
     while (1) {
         lock_acquire(curproc->p_sleeplock);
         unsigned num = proc_array_num(curproc->p_children);

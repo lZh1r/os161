@@ -38,7 +38,7 @@ sys_write(int fd, userptr_t buf, size_t len, size_t *ret) {
     u.uio_segflg = UIO_USERSPACE;
     u.uio_rw = UIO_WRITE;
     u.uio_space = proc_getas();
-    return proc_write(curproc, fd, &u, ret);
+    return proc_write(fd, &u, ret);
 }
 
 /* the same thing as write but in opposite direction */
@@ -55,7 +55,7 @@ sys_read(int fd, userptr_t buf, size_t len, size_t *ret) {
     u.uio_segflg = UIO_USERSPACE;
     u.uio_rw = UIO_READ;
     u.uio_space = proc_getas();
-    return proc_read(curproc, fd, &u, ret);
+    return proc_read(fd, &u, ret);
 }
 
 int

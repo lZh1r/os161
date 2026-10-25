@@ -169,7 +169,8 @@ of_incref(struct openfile *of) {
 
 /* wrapper around VOP_WRITE with accessmode checking, and other validation and bookkeeping */
 int
-proc_write(struct proc *proc, int fd, struct uio *uio, size_t *ret) {
+proc_write(int fd, struct uio *uio, size_t *ret) {
+    struct proc *proc = curproc;
     lock_acquire(proc->p_sleeplock);
     unsigned num = openfile_array_num(proc->p_fdtable);
     if (fd < 0 || (unsigned)fd >= num) {
@@ -206,7 +207,8 @@ proc_write(struct proc *proc, int fd, struct uio *uio, size_t *ret) {
 
 /* wrapper around VOP_READ with accessmode checking, and other validation and bookkeeping */
 int
-proc_read(struct proc *proc, int fd, struct uio *uio, size_t *ret) {
+proc_read(int fd, struct uio *uio, size_t *ret) {
+    struct proc *proc = curproc;
     lock_acquire(proc->p_sleeplock);
     unsigned num = openfile_array_num(proc->p_fdtable);
     if (fd < 0 || (unsigned)fd >= num) {

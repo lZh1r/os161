@@ -63,13 +63,11 @@ struct vnode;
 
 /*
  * Process status
- * PROC_NEW - brand new process (maybe?)
- * PROC_ACTIVE - a process that has been properly initialized and can be run by the system
+ * PROC_ACTIVE - a process that has been properly initialized and can be used by the system
  * PROC_EXIT - a process has exited, but its resources cannot yet be reclaimed, as its parent has not returned from waitpid call
  * PROC_DESTROY - a process can be destroyed
  */
 enum proc_status {
-    PROC_NEW,
     PROC_ACTIVE,
     PROC_EXIT,
     PROC_DESTROY
@@ -186,9 +184,9 @@ void proc_free_fdtable(struct proc *proc);
 /* Close a file descriptor fd for process proc */
 int proc_close(struct proc *proc, int fd);
 /* Write to a file specified under file descriptor fd */
-int proc_write(struct proc *proc, int fd, struct uio *uio, size_t *ret);
+int proc_write(int fd, struct uio *uio, size_t *ret);
 /* Read syscall backend */
-int proc_read(struct proc *proc, int fd, struct uio *uio, size_t *ret);
+int proc_read(int fd, struct uio *uio, size_t *ret);
 /* Dup2 support */
 int proc_dup2(int oldfd, int newfd);
 /* lseek support */

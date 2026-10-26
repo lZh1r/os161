@@ -172,6 +172,7 @@ int
 proc_write(int fd, struct uio *uio, size_t *ret) {
     struct proc *proc = curproc;
     lock_acquire(proc->p_sleeplock);
+    // check fd validity
     unsigned num = openfile_array_num(proc->p_fdtable);
     if (fd < 0 || (unsigned)fd >= num) {
         lock_release(proc->p_sleeplock);
@@ -182,6 +183,7 @@ proc_write(int fd, struct uio *uio, size_t *ret) {
         lock_release(proc->p_sleeplock);
         return EBADF;
     }
+    // check accessmode
     lock_acquire(of->of_lock);
     int accessmode = of->of_openflags & O_ACCMODE;
     if (!(accessmode == O_WRONLY || accessmode == O_RDWR)) {
@@ -189,6 +191,7 @@ proc_write(int fd, struct uio *uio, size_t *ret) {
         lock_release(proc->p_sleeplock);
         return EBADF;
     }
+    // setup uio_offset according to seek position of the openfile
     size_t before = uio->uio_resid;
     uio->uio_offset = of->of_seekpos;
     int result = VOP_WRITE(of->of_vn, uio);
@@ -197,6 +200,7 @@ proc_write(int fd, struct uio *uio, size_t *ret) {
         lock_release(proc->p_sleeplock);
         return result;
     }
+    // record the amount of bytes written and adjust seek position accordingly
     size_t written = before - uio->uio_resid;
     *ret = written;
     of->of_seekpos += written;
@@ -210,6 +214,7 @@ int
 proc_read(int fd, struct uio *uio, size_t *ret) {
     struct proc *proc = curproc;
     lock_acquire(proc->p_sleeplock);
+    // check fd validity
     unsigned num = openfile_array_num(proc->p_fdtable);
     if (fd < 0 || (unsigned)fd >= num) {
         lock_release(proc->p_sleeplock);
@@ -220,13 +225,17 @@ proc_read(int fd, struct uio *uio, size_t *ret) {
         lock_release(proc->p_sleeplock);
         return EBADF;
     }
+
     lock_acquire(of->of_lock);
+    // check accessmode
     int accessmode = of->of_openflags & O_ACCMODE;
     if (!(accessmode == O_RDONLY || accessmode == O_RDWR)) {
         lock_release(of->of_lock);
         lock_release(proc->p_sleeplock);
         return EBADF;
     }
+
+    // setup uio_offset according to seek position of the openfile
     size_t before = uio->uio_resid;
     uio->uio_offset = of->of_seekpos;
     int result = VOP_READ(of->of_vn, uio);
@@ -235,6 +244,7 @@ proc_read(int fd, struct uio *uio, size_t *ret) {
         lock_release(proc->p_sleeplock);
         return result;
     }
+    // record the amount of bytes read and adjust seek position accordingly
     size_t read = before - uio->uio_resid;
     *ret = read;
     of->of_seekpos += read;

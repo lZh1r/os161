@@ -36,8 +36,14 @@ sys_getpid(void) {
 
 int
 sys_waitpid(pid_t pid, userptr_t status, int options) {
-    if (pid <= 0 || options != 0) {
+    if (options != 0) {
         return EINVAL;
+    }
+    if (pid < 0) {
+        return ESRCH;
+    }
+    if (pid == 0) {
+        return ECHILD;
     }
     struct proc *target = proc_get_by_id(pid);
     if (target == NULL) {

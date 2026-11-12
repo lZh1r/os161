@@ -352,6 +352,8 @@ file      proc/fs_support.c
 file      vm/kmalloc.c
 
 optofffile dumbvm   vm/addrspace.c
+optofffile dumbvm   vm/bootstrap.c
+optofffile dumbvm   vm/coremap.c
 
 #
 # Network

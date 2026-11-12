@@ -55,6 +55,32 @@ int vm_fault(int faulttype, vaddr_t faultaddress);
 vaddr_t alloc_kpages(unsigned npages);
 void free_kpages(vaddr_t addr);
 
+////// COREMAP //////
+
+enum coremap_entry_type {
+    CORE_FREE,
+    CORE_KERN,
+    CORE_USER,
+    CORE_RESERVED
+};
+
+struct coremap_entry {
+    unsigned length; // 0 for tail pages in kernel allocations
+    enum coremap_entry_type status;
+};
+
+/* Initialize coremap */
+void coremap_init(void);
+
+/* Get the coremap pointer */
+struct coremap_entry *coremap_get(void);
+
+/* 
+ * Get the total amount of pages a coremap can hold.
+ * Basically a number of pages in the entire system
+ */
+unsigned int coremap_get_total_pages(void);
+
 /*
  * Return amount of memory (in bytes) used by allocated coremap pages.  If
  * there are ongoing allocations, this value could change after it is returned

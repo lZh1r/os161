@@ -12,7 +12,7 @@ static unsigned int first_free_index;
 static
 unsigned
 paddr_to_index(paddr_t paddr) {
-    return (paddr & ~PAGE_SIZE) / PAGE_SIZE;
+    return paddr / PAGE_SIZE;
 }
 
 /* 
@@ -57,8 +57,8 @@ coremap_init(void) {
     }
 
     /* initialize the rest of the stuff */
-    used_pages = 0;
     first_free_index = paddr_to_index(firstfree);
+    used_pages = first_free_index;
     spinlock_init(&coremap_lock);
 }
 
@@ -90,13 +90,15 @@ alloc_kpages(unsigned npages) {
     vaddr_t result = 0;
 
     spinlock_acquire(&coremap_lock);
-    for (unsigned i = first_free_index; i < total_pages; i++) {
+    for (unsigned i = first_free_index; i < total_pages - npages; i++) {
         struct coremap_entry *entry = &coremap[i];
         if (entry->status != CORE_FREE) {
             continue;
         }
         if (npages == 1) {
+            used_pages++;
             entry->status = CORE_KERN;
+            entry->length = 1;
             result = PADDR_TO_KVADDR(i * PAGE_SIZE);
             break;
         } else {
@@ -116,6 +118,7 @@ alloc_kpages(unsigned npages) {
             result = PADDR_TO_KVADDR(i * PAGE_SIZE);
             entry->status = CORE_KERN;
             entry->length = npages;
+            used_pages += npages;
             for (unsigned u = 1; u < npages; u++) {
                 entry = &coremap[i + u];
                 entry->status = CORE_KERN;
@@ -138,6 +141,10 @@ free_kpages(vaddr_t addr) {
 
     /* free the pages */
     spinlock_acquire(&coremap_lock);
+    if (coremap[index].status == CORE_FREE) {
+        kprintf("%du\n", coremap[index].length);
+        panic("oh no");
+    }
     if (coremap[index].length > 1) {
         unsigned length = coremap[index].length;
         KASSERT(length != 0);
@@ -150,8 +157,10 @@ free_kpages(vaddr_t addr) {
             entry->status = CORE_FREE;
             entry->length = 1;
         }
-    } else {
+        used_pages -= length;
+    } else if (coremap[index].length == 1) {
         coremap[index].status = CORE_FREE;
+        used_pages--;
     }
     spinlock_release(&coremap_lock);
 }

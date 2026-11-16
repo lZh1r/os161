@@ -621,6 +621,9 @@ static const char *testmenu[] = {
 	"[fs5] FS long stress                ",
 	"[fs6] FS create stress              ",
 	"[hm1] HMAC unit test                ",
+#if !OPT_DUMBVM
+    "[vmt1] VM test 1                    ",
+#endif
 	NULL
 };
 
@@ -810,6 +813,10 @@ static struct {
 	{ "dl",	dltest },
 	{ "ll1",	ll1test },
 	{ "ll16",	ll16test },
+#endif
+
+#if !OPT_DUMBVM
+    { "vmt1", vmt1 },
 #endif
 
 	{ NULL, NULL }

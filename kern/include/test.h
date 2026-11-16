@@ -131,6 +131,8 @@ void menu(char *argstr);
 /* The main function, called from start.S. */
 void kmain(char *bootstring);
 
+int vmt1(int, char**);
+
 #if OPT_SYNCHPROBS
 
 /*

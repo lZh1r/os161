@@ -40,6 +40,38 @@
 
 struct vnode;
 
+#define PT_SIZE 1024
+#define VM_STACK_PAGES 12
+
+#define VM_REG_READ 0x01
+#define VM_REG_WRITE 0x02
+#define VM_REG_EXECUTE 0x04
+#define VM_REG_STATIC 0x08
+
+typedef uint32_t pte_t;
+
+struct page_directory {
+    struct page_table *entries[PT_SIZE];
+};
+
+struct page_table {
+    pte_t entries[PT_SIZE];
+};
+
+struct vm_region {
+    vaddr_t start;
+    vaddr_t end;
+    /*
+     * Flags show access mode, whether the region is static or not and probably more.
+     * 0000srwx 
+     * s - static (cannot be resized)
+     * r - read
+     * w - write
+     * x - execute
+     * */
+    uint8_t flags;  
+    struct vm_region *next;
+};
 
 /*
  * Address space - data structure associated with the virtual memory
@@ -59,6 +91,12 @@ struct addrspace {
         paddr_t as_stackpbase;
 #else
         /* Put stuff here for your VM system */
+        struct lock *lock;
+        struct page_directory *page_dir;
+        struct vm_region *regions;
+
+        vaddr_t heap_start;
+        vaddr_t heap_end;
 #endif
 };
 

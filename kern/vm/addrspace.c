@@ -54,6 +54,27 @@ as_create(void)
 	 * Initialize as needed.
 	 */
 
+    as->lock = lock_create("as lock");
+    if (as->lock == NULL) {
+        kfree(as);
+        return NULL;
+    }
+
+    as->page_dir = kmalloc(sizeof(struct page_directory));
+    if (as->page_dir == NULL) {
+        lock_destroy(as->lock);
+        kfree(as);
+        return NULL;
+    }
+
+    for (int i = 0; i < PT_SIZE; i++) {
+        as->page_dir->entries[i] = NULL;
+    }
+
+    as->regions = NULL;
+    as->heap_start = 0;
+    as->heap_end = 0;
+
 	return as;
 }
 
@@ -71,10 +92,63 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	 * Write this.
 	 */
 
-	(void)old;
+    lock_acquire(old->lock);
+    // copy page tables over
+    // TODO: copy over the underlying physical frames
+    for (int i = 0; i < PT_SIZE; i++) {
+        if (old->page_dir->entries[i] != NULL) {
+            struct page_table *pt = kmalloc(sizeof(struct page_table));
+            if (pt == NULL) {
+                goto fail;
+            }
+            for (int j = 0; j < PT_SIZE; j++) {
+                pt->entries[j] = old->page_dir->entries[i]->entries[j];
+            }
+            newas->page_dir->entries[i] = pt;
+        }
+    }
+
+    //copy memory regions
+    struct vm_region *old_regions = old->regions;
+    if (old_regions != NULL) {
+        newas->regions = kmalloc(sizeof(struct vm_region));
+        if (newas->regions == NULL) {
+            goto fail;
+        }
+        newas->regions->start = old_regions->start;
+        newas->regions->end = old_regions->end;
+        newas->regions->flags = old_regions->flags;
+        newas->regions->next = NULL;
+        struct vm_region *current_new = newas->regions;
+        struct vm_region *next = old_regions->next;
+        while (next != NULL) {
+            current_new->next = kmalloc(sizeof(struct vm_region));
+            if (current_new->next == NULL) {
+                goto fail;
+            }
+            current_new = current_new->next;
+
+            current_new->start = next->start;
+            current_new->end = next->end;
+            current_new->flags = next->flags;
+            current_new->next = NULL;
+
+            next = next->next;
+        }
+    }
+
+	newas->heap_start = old->heap_start;
+	newas->heap_end = old->heap_end;
+
+    lock_release(old->lock);
 
 	*ret = newas;
 	return 0;
+
+fail:
+    lock_release(old->lock);
+    as_destroy(newas);
+    return ENOMEM;
 }
 
 void
@@ -84,6 +158,22 @@ as_destroy(struct addrspace *as)
 	 * Clean up as needed.
 	 */
 
+    for (int i = 0; i < PT_SIZE; i++) {
+        if (as->page_dir->entries[i] != NULL) {
+            kfree(as->page_dir->entries[i]);
+            //TODO: free the physical pages
+        }
+    }
+
+    struct vm_region *next = as->regions;
+    while (next != NULL) {
+        struct vm_region *temp = next->next;
+        kfree(next);
+        next = temp;
+    }
+
+    lock_destroy(as->lock);
+    kfree(as->page_dir);
 	kfree(as);
 }
 
@@ -134,13 +224,60 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 	 * Write this.
 	 */
 
-	(void)as;
-	(void)vaddr;
-	(void)memsize;
-	(void)readable;
-	(void)writeable;
-	(void)executable;
-	return ENOSYS;
+    KASSERT(as != NULL);
+
+    if (memsize == 0 || vaddr >= MIPS_KSEG0 || vaddr + memsize > MIPS_KSEG0 || memsize > MIPS_KSEG0 - vaddr) {
+        return EINVAL;
+    }
+
+    struct vm_region *reg = kmalloc(sizeof(struct vm_region));
+    if (reg == NULL) {
+        return ENOMEM;
+    }
+
+    reg->start = vaddr;
+    reg->end = vaddr + memsize;
+    reg->next = NULL;
+
+    reg->flags = (readable ? VM_REG_READ : 0) | (writeable ? VM_REG_WRITE : 0) | (executable ? VM_REG_EXECUTE : 0);
+    // everything is static except for the heap
+    reg->flags |= VM_REG_STATIC;
+
+    lock_acquire(as->lock);
+
+    struct vm_region *cur = as->regions;
+    struct vm_region *prev = NULL;
+    while (cur != NULL) {
+        // check for overlap
+        if (reg->start < cur->end && cur->start < reg->end) {
+            kfree(reg);
+            lock_release(as->lock);
+            return EINVAL;
+        }
+
+        if (cur->start >= reg->end) {
+            reg->next = cur;
+            if (prev == NULL) {
+                as->regions = reg;
+            } else {
+                prev->next = reg;
+            }
+            lock_release(as->lock);
+            return 0;
+        }
+        
+        prev = cur;
+        cur = cur->next;
+    }
+
+    if (prev == NULL) {
+        as->regions = reg;
+    } else {
+        prev->next = reg;
+    }
+
+    lock_release(as->lock);
+	return 0;
 }
 
 int
@@ -149,6 +286,8 @@ as_prepare_load(struct addrspace *as)
 	/*
 	 * Write this.
 	 */
+
+    // TODO: Load physical pages for the elf segments
 
 	(void)as;
 	return 0;
@@ -161,7 +300,37 @@ as_complete_load(struct addrspace *as)
 	 * Write this.
 	 */
 
-	(void)as;
+    struct vm_region *heap = kmalloc(sizeof(struct vm_region));
+    if (heap == NULL) {
+        return ENOMEM;
+    }
+    heap->next = NULL;
+    heap->flags = VM_REG_READ | VM_REG_WRITE;
+
+    lock_acquire(as->lock);
+
+    struct vm_region *prev = NULL;
+    struct vm_region *cur = as->regions;
+    while (cur != NULL) {
+        prev = cur;
+        cur = cur->next;
+    }
+
+    if (prev == NULL) {
+        lock_release(as->lock);
+        return EINVAL;
+    }
+
+    heap->start = (prev->end + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    heap->end = heap->start;
+    prev->next = heap;
+    as->heap_start = heap->start;
+    as->heap_end = heap->end;
+
+    lock_release(as->lock);
+
+    // TODO: invalidate the tlb
+
 	return 0;
 }
 
@@ -172,8 +341,36 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 	 * Write this.
 	 */
 
-	(void)as;
+    struct vm_region *stack = kmalloc(sizeof(struct vm_region));
+    if (stack == NULL) {
+        return ENOMEM;
+    }
+    stack->next = NULL;
+    stack->start = USERSTACK - VM_STACK_PAGES * PAGE_SIZE;
+    stack->end = USERSTACK;
+    stack->flags = VM_REG_READ | VM_REG_WRITE | VM_REG_STATIC;
 
+    lock_acquire(as->lock);
+
+    struct vm_region *cur = as->regions;
+    struct vm_region *prev = NULL;
+    while (cur != NULL) {
+        prev = cur;
+        cur = cur->next;
+    }
+
+    if (prev == NULL) {
+        as->regions = stack;
+    } else {
+        if (stack->start < prev->end) {
+            kfree(stack);
+            lock_release(as->lock);
+            return EINVAL;
+        }
+        prev->next = stack;
+    }
+
+    lock_release(as->lock);
 	/* Initial user-level stack pointer */
 	*stackptr = USERSTACK;
 

@@ -355,6 +355,7 @@ optofffile dumbvm   vm/addrspace.c
 optofffile dumbvm   vm/bootstrap.c
 optofffile dumbvm   vm/coremap.c
 optofffile dumbvm   vm/pagetable.c
+optofffile dumbvm   vm/tlb.c
 
 optofffile dumbvm   test/vmtest.c
 

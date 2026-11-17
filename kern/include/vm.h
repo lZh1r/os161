@@ -95,7 +95,16 @@ void vm_tlbshootdown(const struct tlbshootdown *);
  * General physical frame allocation function.
  * Returns a KERNEL virtual address
  */
-paddr_t vm_alloc(unsigned npages, enum coremap_entry_type type);
+paddr_t vm_alloc(unsigned npages, enum coremap_entry_type type, bool locked);
 void vm_free(paddr_t addr);
+paddr_t vm_copy(paddr_t addr);
+
+
+/*
+ * TLB helper functions
+ */
+void itlb_write(vaddr_t vaddr, paddr_t paddr);
+paddr_t itlb_read(vaddr_t vaddr);
+void itlb_flush(void);
 
 #endif /* _VM_H_ */

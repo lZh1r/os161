@@ -184,10 +184,14 @@ int load_elf(struct vnode *v, vaddr_t *entrypoint);
 
 
 /*
- * Page table functions
+ * Page table functions.
+ * Intended to be called while holding the address space lock.
  */
 
-/* Lookup a page table entry based on a virtual address addr */
+/* 
+ * Lookup a page table entry based on a virtual address addr. 
+ * Called before vm_alloc to setup virtual pages.
+ */
 int pt_upsert(struct addrspace *as, vaddr_t addr, pte_t **ret);
 /* 
  * Set the pte corresponding to virtual address addr to link to physical frame at frame_addr.
@@ -198,6 +202,8 @@ void pt_map(pte_t *pte, paddr_t frame_addr);
  * Mark the virtual page as not resident and return its backing physical address.
  */
 paddr_t pt_unmap(pte_t *pte);
+
+struct vm_region *as_probe(struct addrspace *as, vaddr_t addr);
 
 
 #endif /* _ADDRSPACE_H_ */

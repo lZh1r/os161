@@ -78,7 +78,7 @@ coremap_used_bytes(void) {
 }
 
 paddr_t
-vm_alloc(unsigned npages, enum coremap_entry_type type) {
+vm_alloc(unsigned npages, enum coremap_entry_type type, bool locked) {
     if (!total_pages) {
         return ram_stealmem(npages);
     }
@@ -89,7 +89,9 @@ vm_alloc(unsigned npages, enum coremap_entry_type type) {
 
     paddr_t result = 0;
 
-    spinlock_acquire(&coremap_lock);
+    if (!locked) {
+        spinlock_acquire(&coremap_lock);
+    }
     for (unsigned i = first_free_index; i < total_pages - npages; i++) {
         struct coremap_entry *entry = &coremap[i];
         if (entry->status != CORE_FREE) {
@@ -121,13 +123,15 @@ vm_alloc(unsigned npages, enum coremap_entry_type type) {
             used_pages += npages;
             for (unsigned u = 1; u < npages; u++) {
                 entry = &coremap[i + u];
-                entry->status = CORE_KERN;
+                entry->status = type;
                 entry->length = 0; // means that this is a tail
             }
             break;
         }
     }
-    spinlock_release(&coremap_lock);
+    if (!locked) {
+        spinlock_release(&coremap_lock);
+    }
 
     return result;
 }
@@ -138,10 +142,7 @@ vm_free(paddr_t addr) {
 
     /* free the pages */
     spinlock_acquire(&coremap_lock);
-    if (coremap[index].status == CORE_FREE) {
-        kprintf("%du\n", coremap[index].length);
-        panic("oh no");
-    }
+    KASSERT(coremap[index].status != CORE_FREE);
     if (coremap[index].length > 1) {
         unsigned length = coremap[index].length;
         if (length == 0) {
@@ -165,9 +166,22 @@ vm_free(paddr_t addr) {
     spinlock_release(&coremap_lock);
 }
 
+paddr_t
+vm_copy(paddr_t addr) {
+    unsigned index = paddr_to_index(addr);
+    spinlock_acquire(&coremap_lock);
+    struct coremap_entry entry = coremap[index];
+    paddr_t result = vm_alloc(entry.length, entry.status, true);
+    if (result) {
+        memcpy((void *)PADDR_TO_KVADDR(result), (void *)PADDR_TO_KVADDR(addr), entry.length * PAGE_SIZE);
+    }
+    spinlock_release(&coremap_lock);
+    return result;
+}
+
 vaddr_t
 alloc_kpages(unsigned npages) {
-    paddr_t result = vm_alloc(npages, CORE_KERN);
+    paddr_t result = vm_alloc(npages, CORE_KERN, false);
     if (result) {
         return PADDR_TO_KVADDR(result);
     }
@@ -180,14 +194,4 @@ free_kpages(vaddr_t addr) {
     vm_free(paddr);
 }
 
-
-int vm_fault(int faulttype, vaddr_t faultaddress) {
-    (void)faulttype;
-    (void)faultaddress;
-    return 0;
-}
-
-void vm_tlbshootdown(const struct tlbshootdown *shoot) {
-    (void)shoot;
-}
 

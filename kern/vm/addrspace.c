@@ -102,7 +102,16 @@ as_copy(struct addrspace *old, struct addrspace **ret)
                 goto fail;
             }
             for (int j = 0; j < PT_SIZE; j++) {
-                pt->entries[j] = old->page_dir->entries[i]->entries[j];
+                pte_t old_pte = old->page_dir->entries[i]->entries[j];
+                if (old_pte & PTE_RESIDENT) {
+                    paddr_t new_paddr = vm_copy(PTE_TO_PADDR(old_pte));
+                    if (!new_paddr) {
+                        goto fail;
+                    }
+                    pt->entries[j] = new_paddr | PTE_RESIDENT;
+                } else {
+                    pt->entries[j] = 0;
+                }
             }
             newas->page_dir->entries[i] = pt;
         }
@@ -181,6 +190,7 @@ as_destroy(struct addrspace *as)
     lock_destroy(as->lock);
     kfree(as->page_dir);
 	kfree(as);
+    itlb_flush();
 }
 
 void
@@ -196,6 +206,8 @@ as_activate(void)
 		 */
 		return;
 	}
+
+    itlb_flush();
 
 	/*
 	 * Write this.
@@ -293,9 +305,33 @@ as_prepare_load(struct addrspace *as)
 	 * Write this.
 	 */
 
-    // TODO: Load physical pages for the elf segments
+    lock_acquire(as->lock);
 
-	(void)as;
+    struct vm_region *cur = as->regions;
+    while (cur != NULL) {
+        pte_t *pte;
+        int result;
+        vaddr_t start = cur->start & ~(PAGE_SIZE - 1);
+        vaddr_t end = (cur->end + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+        for (vaddr_t i = start; i < end; i += PAGE_SIZE) {
+            if ((result = pt_upsert(as, start, &pte))) {
+                lock_release(as->lock);
+                return result;
+            }
+            if (*pte & PTE_RESIDENT) {
+                continue;
+            }
+            paddr_t addr = vm_alloc(1, CORE_USER, false);
+            if (addr == 0) {
+                lock_release(as->lock);
+                return ENOMEM;
+            }
+            pt_map(pte, addr);
+        }
+        cur = cur->next;
+    }
+
+    lock_release(as->lock);
 	return 0;
 }
 
@@ -335,7 +371,7 @@ as_complete_load(struct addrspace *as)
 
     lock_release(as->lock);
 
-    // TODO: invalidate the tlb
+    itlb_flush();
 
 	return 0;
 }
@@ -383,3 +419,71 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 	return 0;
 }
 
+struct vm_region *
+as_probe(struct addrspace *as, vaddr_t addr) {
+    lock_acquire(as->lock);
+    struct vm_region *cur = as->regions;
+    struct vm_region *ret = NULL;
+    while (cur != NULL) {
+        if (cur->start <= addr && addr < cur->end) {
+            ret = cur;
+            break;
+        }
+        cur = cur->next;
+    }
+    lock_release(as->lock);
+
+    return ret;
+}
+
+int
+vm_fault(int faulttype, vaddr_t faultaddress) {
+    paddr_t paddr;
+    pte_t *pte;
+    (void)faulttype;
+    struct addrspace *as = proc_getas();
+
+    struct vm_region *reg = as_probe(as, faultaddress);
+    if (reg == NULL) {
+        return 1;
+    }
+
+    vaddr_t addr = faultaddress & ~(PAGE_SIZE - 1);
+    paddr_t tlb_p = itlb_read(addr);
+    // Already in tlb
+    if (tlb_p) {
+        panic("fdfd");
+        return 0;
+    }
+
+    lock_acquire(as->lock);
+
+    // Get the relevant pte
+    int result = pt_upsert(as, addr, &pte);
+    if (result) {
+        lock_release(as->lock);
+        return result;
+    }
+
+    // If not resident, allocate
+    if (*pte & PTE_RESIDENT) {
+        paddr = PTE_TO_PADDR(*pte);
+    } else {
+        paddr = vm_alloc(1, CORE_USER, false);
+        if (paddr == 0) {
+            lock_release(as->lock);
+            return ENOMEM;
+        }
+        pt_map(pte, paddr);
+    }
+
+    // Write to the TLB
+    itlb_write(addr, paddr);
+
+    lock_release(as->lock);
+    return 0;
+}
+
+void vm_tlbshootdown(const struct tlbshootdown *shoot) {
+    (void)shoot;
+}

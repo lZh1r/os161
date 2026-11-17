@@ -48,6 +48,22 @@ struct vnode;
 #define VM_REG_EXECUTE 0x04
 #define VM_REG_STATIC 0x08
 
+#define PT_MASK 0x3FF
+#define PT_DIR(addr)((addr >> 22) & PT_MASK)
+#define PT_TABLE(addr)((addr >> 12) & PT_MASK)
+#define PT_OFFSET(addr)(addr & 0xFFF)
+
+#define PTE_TO_PADDR(pte)(pte & (~0xFFF))
+#define PTE_RESIDENT 0x1
+
+/*
+ *  Page table entry.
+ *  A 4 byte word for convenience sake, as this way a page table neatly fits onto a single page.
+ *  Bits 31 - 12 are the physical address of the page, while the rest is for flags and stuff.
+ *  The other 12 bits: 000000000sr
+ *  r - resident.
+ *  s - swapped out.
+ */
 typedef uint32_t pte_t;
 
 struct page_directory {
@@ -165,6 +181,23 @@ int               as_define_stack(struct addrspace *as, vaddr_t *initstackptr);
  */
 
 int load_elf(struct vnode *v, vaddr_t *entrypoint);
+
+
+/*
+ * Page table functions
+ */
+
+/* Lookup a page table entry based on a virtual address addr */
+int pt_upsert(struct addrspace *as, vaddr_t addr, pte_t **ret);
+/* 
+ * Set the pte corresponding to virtual address addr to link to physical frame at frame_addr.
+ * Target pte has to exist at this point in time.
+ */
+void pt_map(pte_t *pte, paddr_t frame_addr);
+/*
+ * Mark the virtual page as not resident and return its backing physical address.
+ */
+paddr_t pt_unmap(pte_t *pte);
 
 
 #endif /* _ADDRSPACE_H_ */

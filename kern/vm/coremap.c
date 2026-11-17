@@ -144,7 +144,10 @@ vm_free(paddr_t addr) {
     }
     if (coremap[index].length > 1) {
         unsigned length = coremap[index].length;
-        KASSERT(length != 0);
+        if (length == 0) {
+            spinlock_release(&coremap_lock);
+            return;
+        }
         for (unsigned i = 0; i < length; i++) {
             struct coremap_entry *entry = &coremap[index + i];
             if (i > 0) {

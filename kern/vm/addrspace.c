@@ -160,8 +160,14 @@ as_destroy(struct addrspace *as)
 
     for (int i = 0; i < PT_SIZE; i++) {
         if (as->page_dir->entries[i] != NULL) {
-            kfree(as->page_dir->entries[i]);
-            //TODO: free the physical pages
+            struct page_table *pt = as->page_dir->entries[i];
+            for (int j = 0; j < PT_SIZE; j++) {
+                paddr_t frame = pt_unmap(&pt->entries[j]);
+                if (frame) {
+                    vm_free(frame);
+                }
+            }
+            kfree(pt);
         }
     }
 

@@ -91,5 +91,11 @@ unsigned int coremap_used_bytes(void);
 /* TLB shootdown handling called from interprocessor_interrupt */
 void vm_tlbshootdown(const struct tlbshootdown *);
 
+/* 
+ * General physical frame allocation function.
+ * Returns a KERNEL virtual address
+ */
+paddr_t vm_alloc(unsigned npages, enum coremap_entry_type type);
+void vm_free(paddr_t addr);
 
 #endif /* _VM_H_ */

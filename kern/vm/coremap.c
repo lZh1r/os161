@@ -77,17 +77,17 @@ coremap_used_bytes(void) {
     return used_pages * PAGE_SIZE;
 }
 
-vaddr_t
-alloc_kpages(unsigned npages) {
+paddr_t
+vm_alloc(unsigned npages, enum coremap_entry_type type) {
     if (!total_pages) {
-        return PADDR_TO_KVADDR(ram_stealmem(npages));
+        return ram_stealmem(npages);
     }
 
     if (npages > total_pages || (npages + used_pages) > total_pages) {
         return 0;
     }
 
-    vaddr_t result = 0;
+    paddr_t result = 0;
 
     spinlock_acquire(&coremap_lock);
     for (unsigned i = first_free_index; i < total_pages - npages; i++) {
@@ -97,9 +97,9 @@ alloc_kpages(unsigned npages) {
         }
         if (npages == 1) {
             used_pages++;
-            entry->status = CORE_KERN;
+            entry->status = type;
             entry->length = 1;
-            result = PADDR_TO_KVADDR(i * PAGE_SIZE);
+            result = i * PAGE_SIZE;
             break;
         } else {
             int bad = 0;
@@ -115,8 +115,8 @@ alloc_kpages(unsigned npages) {
                 continue;
             }
 
-            result = PADDR_TO_KVADDR(i * PAGE_SIZE);
-            entry->status = CORE_KERN;
+            result = i * PAGE_SIZE;
+            entry->status = type;
             entry->length = npages;
             used_pages += npages;
             for (unsigned u = 1; u < npages; u++) {
@@ -133,11 +133,8 @@ alloc_kpages(unsigned npages) {
 }
 
 void
-free_kpages(vaddr_t addr) {
-    /* get the physical address of the page in question */
-    paddr_t paddr = kvaddr_to_paddr(addr);
-
-    unsigned index = paddr_to_index(paddr);
+vm_free(paddr_t addr) {
+    unsigned index = paddr_to_index(addr);
 
     /* free the pages */
     spinlock_acquire(&coremap_lock);
@@ -164,6 +161,22 @@ free_kpages(vaddr_t addr) {
     }
     spinlock_release(&coremap_lock);
 }
+
+vaddr_t
+alloc_kpages(unsigned npages) {
+    paddr_t result = vm_alloc(npages, CORE_KERN);
+    if (result) {
+        return PADDR_TO_KVADDR(result);
+    }
+    return 0;
+}
+
+void
+free_kpages(vaddr_t addr) {
+    paddr_t paddr = kvaddr_to_paddr(addr);
+    vm_free(paddr);
+}
+
 
 int vm_fault(int faulttype, vaddr_t faultaddress) {
     (void)faulttype;
